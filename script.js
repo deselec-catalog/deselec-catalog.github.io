@@ -1,5 +1,5 @@
 // ===== CONFIGURACIÓN =====
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0Z8um8ItluuGL166574BIVHIeqQT1b60uflscRV1pji6nlo812SGnUR_Pbw-C2Zhd_g/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxjS2V01X_JwsoFaauYZm8GI5LpIsRw_BlcoZR4eJDK9tLRocC4qk0Ay-jg1LHpoegNuA/exec';
 
 // ===== FUNCIÓN DE PRUEBA =====
 async function testGoogleScript() {
