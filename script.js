@@ -1,237 +1,208 @@
 // ===== CONFIGURACIÓN =====
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby9ogLpbeO7bnFCdiyfnhyP-8o4zy5yVA76bDFdpw_StXnXbo6ZVIJWYuOWBAN4E8VqTA/exec';
-const PASSWORD = 'inventario123';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0Z8um8ItluuGL166574BIVHIeqQT1b60uflscRV1pji6nlo812SGnUR_Pbw-C2Zhd_g/exec';
 
-// ===== FUNCIONES DE PRUEBA =====
-async function testConnection() {
-    console.log('🔍 Probando conexión a Google Sheets...');
+// ===== FUNCIÓN DE PRUEBA =====
+async function testGoogleScript() {
+    console.log('🔍 Probando Google Apps Script...');
+    
+    // Mostrar mensaje de carga
+    const statusElement = document.getElementById('sync-status');
+    if (statusElement) {
+        statusElement.innerHTML = '🔄 Probando conexión...';
+    }
     
     try {
-        // URL directa de prueba
-        const testUrl = `${GOOGLE_SCRIPT_URL}?action=test`;
+        // URL de prueba
+        const testUrl = `${GOOGLE_SCRIPT_URL}?action=test&_=${Date.now()}`;
         console.log('URL de prueba:', testUrl);
         
-        const response = await fetch(testUrl, {
-            method: 'GET',
-            mode: 'no-cors' // Esto puede ayudar con problemas CORS
-        });
-        
-        console.log('Estado de respuesta:', response.status);
-        console.log('Tipo:', response.type);
-        
-        // Si estamos en modo 'no-cors', no podemos leer la respuesta
-        if (response.type === 'opaque') {
-            console.log('✅ Conexión exitosa (pero no podemos leer la respuesta debido a CORS)');
-            alert('✅ CONEXIÓN EXITOSA!\n\nEl servidor responde, pero hay restricciones CORS.\nEsto es normal con Google Apps Script.');
-            return true;
-        }
+        // Hacer la petición
+        const response = await fetch(testUrl);
+        console.log('Estado:', response.status);
         
         if (response.ok) {
             const data = await response.json();
             console.log('Respuesta:', data);
             
+            // Mostrar resultado
             if (data.status === 'ok') {
-                alert(`✅ CONEXIÓN EXITOSA!\n\nMensaje: ${data.message}\nStatus: ${data.status}`);
+                const message = `✅ CONECTADO!\n\nGoogle Apps Script funcionando\nAcción: ${data.action || 'test'}\nHora: ${new Date(data.timestamp).toLocaleTimeString()}`;
+                alert(message);
+                
+                if (statusElement) {
+                    statusElement.innerHTML = '✅ Conectado a Google Sheets';
+                }
+                
                 return true;
+            } else {
+                alert(`❌ Error en respuesta: ${JSON.stringify(data, null, 2)}`);
+                return false;
             }
+        } else {
+            const errorText = await response.text();
+            console.error('Error texto:', errorText);
+            
+            if (response.status === 401 || response.status === 403) {
+                alert(`❌ ERROR ${response.status}: ACCESO DENEGADO\n\nEl script no está configurado para acceso público.\n\nVe a Google Apps Script y:\n1. Haz clic en "Implementar"\n2. Selecciona "Nueva implementación"\n3. Configura "Quién tiene acceso" como "Cualquier persona"`);
+            } else if (response.status === 404) {
+                alert(`❌ ERROR 404: NO ENCONTRADO\n\nLa URL del script es incorrecta o no existe.\n\nURL actual: ${GOOGLE_SCRIPT_URL}`);
+            } else {
+                alert(`❌ ERROR ${response.status}: ${response.statusText}\n\n${errorText}`);
+            }
+            
+            return false;
         }
-        
-        alert(`❌ Error HTTP: ${response.status} ${response.statusText}`);
-        return false;
         
     } catch (error) {
         console.error('Error completo:', error);
         
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            alert('❌ ERROR: No se puede conectar al servidor.\n\nPosibles causas:\n1. La URL es incorrecta\n2. El script no está publicado\n3. Problemas de red\n\nURL usada: ' + GOOGLE_SCRIPT_URL);
-        } else {
-            alert(`❌ ERROR:\n${error.name}: ${error.message}`);
+        let errorMessage = `❌ ERROR DE CONEXIÓN\n\n${error.name}: ${error.message}`;
+        
+        if (error.message.includes('Failed to fetch')) {
+            errorMessage += '\n\nPosibles causas:\n';
+            errorMessage += '1. La URL es incorrecta\n';
+            errorMessage += '2. El script no está publicado\n';
+            errorMessage += '3. Problemas de red/CORS\n';
+            errorMessage += '4. El script necesita permisos';
+        }
+        
+        errorMessage += `\n\nURL usada: ${GOOGLE_SCRIPT_URL}`;
+        
+        alert(errorMessage);
+        
+        if (statusElement) {
+            statusElement.innerHTML = '❌ Error de conexión';
         }
         
         return false;
     }
 }
 
-async function testWithJSONP() {
-    console.log('🔄 Probando con JSONP (alternativa a CORS)...');
-    
-    // JSONP es una técnica antigua para evitar CORS
-    return new Promise((resolve) => {
-        const callbackName = 'jsonp_callback_' + Date.now();
-        
-        // Crear script element
-        const script = document.createElement('script');
-        script.src = `${GOOGLE_SCRIPT_URL}?action=test&callback=${callbackName}`;
-        
-        // Definir función callback global
-        window[callbackName] = function(data) {
-            console.log('Respuesta JSONP:', data);
-            delete window[callbackName];
-            document.body.removeChild(script);
-            
-            if (data && data.status === 'ok') {
-                alert('✅ CONEXIÓN JSONP EXITOSA!');
-                resolve(true);
-            } else {
-                alert('❌ JSONP falló');
-                resolve(false);
-            }
-        };
-        
-        // Manejar errores
-        script.onerror = function() {
-            console.error('Error cargando script JSONP');
-            delete window[callbackName];
-            document.body.removeChild(script);
-            alert('❌ JSONP: Error cargando script');
-            resolve(false);
-        };
-        
-        // Agregar script al DOM
-        document.body.appendChild(script);
-        
-        // Timeout después de 10 segundos
-        setTimeout(() => {
-            if (window[callbackName]) {
-                delete window[callbackName];
-                document.body.removeChild(script);
-                alert('⏰ JSONP: Timeout después de 10 segundos');
-                resolve(false);
-            }
-        }, 10000);
-    });
-}
-
-async function loadProducts() {
-    console.log('📦 Intentando cargar productos...');
-    
-    try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getProducts`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-        
-        console.log('Estado carga:', response.status);
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log('Datos recibidos:', data);
-            
-            if (data.status === 'success' && data.products) {
-                alert(`✅ ${data.products.length} productos cargados exitosamente!`);
-                
-                // Guardar en localStorage
-                localStorage.setItem('products_cache', JSON.stringify({
-                    products: data.products,
-                    timestamp: Date.now(),
-                    fromGoogleSheets: true
-                }));
-                
-                return data.products;
-            } else {
-                alert(`❌ Error en datos: ${data.message}`);
-            }
-        } else {
-            alert(`❌ Error HTTP: ${response.status}`);
-        }
-    } catch (error) {
-        console.error('Error cargando:', error);
-        alert(`❌ Error: ${error.message}`);
-    }
-    
-    return null;
-}
-
-// ===== FUNCIONES DE INTERFAZ =====
-function addTestButtons() {
+// ===== AGREGAR BOTÓN DE PRUEBA =====
+function addTestButton() {
+    // Buscar donde agregar el botón
+    const header = document.querySelector('header');
     const controls = document.querySelector('.controls');
-    if (!controls) {
-        console.error('No se encontró el elemento .controls');
+    
+    if (!controls && !header) {
+        console.error('No se encontró donde agregar el botón');
         return;
     }
     
-    console.log('Agregando botones de prueba...');
+    // Crear botón
+    const testButton = document.createElement('button');
+    testButton.id = 'test-connection-btn';
+    testButton.className = 'btn btn-primary';
+    testButton.innerHTML = '<i class="fas fa-bug"></i> DEBUG Conexión';
+    testButton.style.margin = '10px';
+    testButton.style.backgroundColor = '#e74c3c';
+    testButton.style.borderColor = '#e74c3c';
     
-    // Crear contenedor para botones
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.marginTop = '10px';
-    buttonContainer.style.padding = '10px';
-    buttonContainer.style.backgroundColor = '#f5f5f5';
-    buttonContainer.style.borderRadius = '8px';
-    buttonContainer.style.border = '1px solid #ddd';
+    testButton.onclick = testGoogleScript;
     
-    // Título
-    const title = document.createElement('h4');
-    title.textContent = 'Pruebas de Conexión';
-    title.style.marginTop = '0';
-    title.style.marginBottom = '10px';
-    buttonContainer.appendChild(title);
+    // Agregar botón
+    if (controls) {
+        controls.appendChild(testButton);
+    } else if (header) {
+        header.appendChild(testButton);
+    }
     
-    // Botón de prueba normal
-    const testBtn = document.createElement('button');
-    testBtn.className = 'btn btn-primary';
-    testBtn.innerHTML = '<i class="fas fa-plug"></i> Probar Conexión';
-    testBtn.onclick = testConnection;
-    testBtn.style.marginRight = '10px';
-    testBtn.style.marginBottom = '5px';
+    console.log('✅ Botón de debug agregado');
+}
+
+// ===== PRUEBA AUTOMÁTICA =====
+async function autoTest() {
+    console.log('🔄 Prueba automática iniciada...');
     
-    // Botón de prueba JSONP
-    const jsonpBtn = document.createElement('button');
-    jsonpBtn.className = 'btn btn-outline';
-    jsonpBtn.innerHTML = '<i class="fas fa-code"></i> Probar JSONP';
-    jsonpBtn.onclick = testWithJSONP;
-    jsonpBtn.style.marginRight = '10px';
-    jsonpBtn.style.marginBottom = '5px';
+    // Esperar 2 segundos para que la página cargue
+    setTimeout(async () => {
+        const connected = await testGoogleScript();
+        
+        if (!connected) {
+            // Si falla, mostrar instrucciones
+            console.log('Mostrando instrucciones de ayuda...');
+            showHelpInstructions();
+        }
+    }, 2000);
+}
+
+function showHelpInstructions() {
+    // Crear panel de ayuda
+    const helpPanel = document.createElement('div');
+    helpPanel.id = 'help-panel';
+    helpPanel.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 0 30px rgba(0,0,0,0.3);
+        z-index: 9999;
+        max-width: 600px;
+        width: 90%;
+        border: 3px solid #e74c3c;
+    `;
     
-    // Botón para cargar datos
-    const loadBtn = document.createElement('button');
-    loadBtn.className = 'btn btn-success';
-    loadBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Cargar Productos';
-    loadBtn.onclick = loadProducts;
-    loadBtn.style.marginBottom = '5px';
+    helpPanel.innerHTML = `
+        <h2 style="color: #e74c3c; margin-top: 0;">⚠️ CONFIGURACIÓN REQUERIDA</h2>
+        
+        <p><strong>Problema:</strong> No se puede conectar a Google Sheets</p>
+        
+        <h3>📋 Pasos para solucionar:</h3>
+        
+        <ol style="text-align: left;">
+            <li><strong>Verifica la URL del script:</strong><br>
+            <code style="background: #f0f0f0; padding: 5px;">${GOOGLE_SCRIPT_URL}</code></li>
+            
+            <li><strong>Abre Google Apps Script:</strong><br>
+            <a href="https://script.google.com" target="_blank">https://script.google.com</a></li>
+            
+            <li><strong>Configura los permisos:</strong>
+                <ul>
+                    <li>Haz clic en "Implementar"</li>
+                    <li>Selecciona "Nueva implementación"</li>
+                    <li>Tipo: "Aplicación web"</li>
+                    <li>Ejecutar como: "Yo" (tu cuenta)</li>
+                    <li><strong style="color: #e74c3c;">Quién tiene acceso: "Cualquier persona"</strong></li>
+                    <li>Haz clic en "Implementar"</li>
+                </ul>
+            </li>
+            
+            <li><strong>Copia la nueva URL</strong> y actualízala en script.js</li>
+        </ol>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="document.getElementById('help-panel').remove();" 
+                    style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Cerrar
+            </button>
+            
+            <button onclick="window.open('https://script.google.com', '_blank');" 
+                    style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
+                Abrir Google Apps Script
+            </button>
+        </div>
+    `;
     
-    // URL actual
-    const urlInfo = document.createElement('div');
-    urlInfo.style.marginTop = '10px';
-    urlInfo.style.fontSize = '12px';
-    urlInfo.style.fontFamily = 'monospace';
-    urlInfo.style.padding = '5px';
-    urlInfo.style.backgroundColor = '#eee';
-    urlInfo.style.borderRadius = '4px';
-    urlInfo.textContent = `URL: ${GOOGLE_SCRIPT_URL}`;
-    
-    // Agregar elementos al contenedor
-    buttonContainer.appendChild(testBtn);
-    buttonContainer.appendChild(jsonpBtn);
-    buttonContainer.appendChild(loadBtn);
-    buttonContainer.appendChild(urlInfo);
-    
-    // Agregar contenedor después de los controles existentes
-    controls.parentNode.insertBefore(buttonContainer, controls.nextSibling);
-    
-    console.log('Botones agregados exitosamente');
+    document.body.appendChild(helpPanel);
 }
 
 // ===== INICIALIZACIÓN =====
 function init() {
-    console.log('🚀 Inicializando página...');
+    console.log('🚀 Inicializando aplicación...');
     
-    // Agregar botones de prueba
-    addTestButtons();
+    // Agregar botón de prueba
+    addTestButton();
     
-    // Probar conexión automáticamente después de 2 segundos
-    setTimeout(() => {
-        console.log('Probando conexión automáticamente...');
-        testConnection();
-    }, 2000);
+    // Ejecutar prueba automática
+    autoTest();
 }
 
-// Iniciar cuando se cargue la página
+// Iniciar cuando cargue la página
 document.addEventListener('DOMContentLoaded', init);
 
-// Hacer funciones disponibles globalmente
-window.testConnection = testConnection;
-window.testWithJSONP = testWithJSONP;
-window.loadProducts = loadProducts;
+// Hacer función disponible globalmente
+window.testGoogleScript = testGoogleScript;
+window.showHelpInstructions = showHelpInstructions;
