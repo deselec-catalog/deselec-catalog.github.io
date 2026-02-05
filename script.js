@@ -1,5 +1,5 @@
 // ===== CONFIGURACIÓN =====
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0Z8um8ItluuGL166574BIVHIeqQT1b60uflscRV1pji6nlo812SGnUR_Pbw-C2Zhd_g/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxN5BZ2TLNEOMD85LODRC3TCw5Kgdj_nesf0CIYUWhcf99dn3lyJBikVX0ng6C33duPNA/exec';
 const PASSWORD = 'inventario123';
 
 // ===== VARIABLES GLOBALES =====
