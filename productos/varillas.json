@@ -1,0 +1,98 @@
+[
+
+    {
+        "id": 3001,
+        "name": "Unión de varilla M8",
+        "description": "Unión de varilla M8.",
+        "price": 0.50,
+        "stock": 329
+    },
+
+    {
+        "id": 3002,
+        "name": "Unión de varilla M10",
+        "description": "Unión de varilla M10.",
+        "price": 0.80,
+        "stock": 771
+    },
+
+    {
+        "id": 3003,
+        "name": "Unión de varilla M10",
+        "description": "Unión de varilla M10.",
+        "price": 1.00,
+        "stock": 69
+    },
+
+    {
+        "id": 3004,
+        "name": "Varilla M4",
+        "description": "Varilla M4 de 1 Metro.",
+        "price": 0.30,
+        "stock": 9
+    },
+
+    {
+        "id": 3005,
+        "name": "Varilla M6",
+        "description": "Varilla M6 de 1 Metro.",
+        "price": 0.80,
+        "stock": 35
+    },
+
+    {
+        "id": 3006,
+        "name": "Varilla M8",
+        "description": "Varilla M8 de 1 Metro.",
+        "price": 1.00,
+        "stock": 0
+    },
+
+    {
+        "id": 3007,
+        "name": "Varilla M10",
+        "description": "Varilla M10 de 1 Metro.",
+        "price": 2.00,
+        "stock": 74
+    },
+
+    {
+        "id": 3008,
+        "name": "Taco Varilla M4",
+        "description": "Taco para varilla M4.",
+        "price": 0.15,
+        "stock": 92
+    },
+
+    {
+        "id": 3009,
+        "name": "Taco Varilla M6",
+        "description": "Taco para varilla M6.",
+        "price": 0.20,
+        "stock": 1242
+    },
+
+    {
+        "id": 3010,
+        "name": "Taco Varilla M8",
+        "description": "Taco para varilla M8.",
+        "price": 0.30,
+        "stock": 858
+    },
+
+    {
+        "id": 3011,
+        "name": "Taco Varilla M10",
+        "description": "Taco para varilla M10.",
+        "price": 0.30,
+        "stock": 2
+    },
+
+    {
+        "id": 3012,
+        "name": "Taco Varilla M12",
+        "description": "Taco para varilla M12.",
+        "price": 0.50,
+        "stock": 36
+    }
+]

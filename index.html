@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockMaster - Catálogo de Almacén</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="categorias.js"></script>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <i class="fas fa-boxes"></i>
+                <div>
+                    <h1>StockMaster</h1>
+                    <div class="subtitle">Catálogo y gestión de inventario</div>
+                </div>
+            </div>
+            <div class="subtitle">
+                <div id="sync-status">🔄 Sincronizando...</div>
+                <div>Total productos: <span id="total-products">0</span></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="search-input" placeholder="Buscar productos por nombre, categoría o descripción...">
+            </div>
+            <div class="filter-group">
+                <select class="filter-select" id="category-filter">
+                    <option value="todas">Todas las categorías</option>
+                </select>
+                <select class="filter-select" id="stock-filter">
+                    <option value="all">Todo el stock</option>
+                    <option value="low">Stock bajo</option>
+                    <option value="medium">Stock medio</option>
+                    <option value="high">Stock alto</option>
+                </select>
+                <button class="btn btn-outline" id="reset-filters">
+                    <i class="fas fa-redo"></i> Restablecer
+                </button>
+                <button class="btn btn-outline" id="sync-button" title="Sincronizar manualmente">
+                    <i class="fas fa-sync-alt"></i> Sincronizar
+                </button>
+                <button class="btn btn-outline" id="export-button" title="Exportar backup">
+                    <i class="fas fa-download"></i> Backup
+                </button>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-icon stat-1">
+                    <i class="fas fa-box-open"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-items">0</h3>
+                    <p>Total en stock</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon stat-2">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="available-products">0</h3>
+                    <p>Productos disponibles</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon stat-3">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="low-stock-count">0</h3>
+                    <p>Stock bajo</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon stat-4">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <div class="stat-info">
+                    <h3 id="total-categories">0</h3>
+                    <p>Categorías</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="products-grid" id="products-container">
+            <div class="no-results">
+                <i class="fas fa-spinner fa-spin"></i>
+                <h3>Cargando productos...</h3>
+                <p>Conectando con la base de datos...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para importar/exportar -->
+    <div id="backup-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h3><i class="fas fa-database"></i> Gestión de Datos</h3>
+            
+            <div class="modal-section">
+                <h4><i class="fas fa-file-export"></i> Exportar Backup</h4>
+                <p>Descarga una copia de seguridad de todos los productos.</p>
+                <button class="btn btn-primary" id="export-json">
+                    <i class="fas fa-download"></i> Exportar JSON
+                </button>
+            </div>
+            
+            <div class="modal-section">
+                <h4><i class="fas fa-file-import"></i> Importar Backup</h4>
+                <p>Restaura datos desde un archivo JSON.</p>
+                <input type="file" id="import-file" accept=".json" style="display: none;">
+                <button class="btn btn-outline" id="import-json">
+                    <i class="fas fa-upload"></i> Seleccionar Archivo
+                </button>
+                <div id="import-status" style="margin-top: 10px; display: none;"></div>
+            </div>
+            
+            <div class="modal-section">
+                <h4><i class="fas fa-cloud"></i> Estado de Sincronización</h4>
+                <p id="sync-info">Última sincronización: <span id="last-sync">Nunca</span></p>
+                <p id="connection-status">Estado: Conectado</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <p>StockMaster &copy; 2024 - Sistema multi-dispositivo</p>
+            <p><i class="fas fa-cloud"></i> Base de datos: Google Sheets | <i class="fas fa-mobile-alt"></i> Acceso desde cualquier dispositivo</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

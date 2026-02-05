@@ -1,0 +1,65 @@
+[
+    {
+        "id": 7000,
+        "name": "Silen Block Soporte de suelo",
+        "description": "Silen Block Soporte de suelo.",
+        "price": 4.50,
+        "stock": 0
+    },
+
+    {
+        "id": 7001,
+        "name": "Silen Block i35",
+        "description": "Silen Block i35 (Packs de 4).",
+        "price": 4.50,
+        "stock": 12
+    },
+
+    {
+        "id": 7002,
+        "name": "Silen Block i45",
+        "description": "Silen Block 435 (Packs de 4).",
+        "price": 4.50,
+        "stock": 0
+    },
+
+    {
+        "id": 7003,
+        "name": "SPA100 Amortiguador Suelo 100mm x 100mm",
+        "description": "SPA100 Amortiguador Suelo 100mm x 100mm.",
+        "price": 10.00,
+        "stock": 2
+    },
+
+    {
+        "id": 7004,
+        "name": "SPA70 Amortiguador Suelo 70mm x 70mm",
+        "description": "SPA100 Amortiguador Suelo 70mm x 70mm.",
+        "price": 8.00,
+        "stock": 4
+    },
+
+    {
+        "id": 7005,
+        "name": "Big Foot",
+        "description": "Big Foot.",
+        "price": 20.00,
+        "stock": 12
+    },
+
+    {
+        "id": 7006,
+        "name": "Clips metalicos sujección de tubos 20mm",
+        "description": "Clips metalicos sujección de tubos 20mm.",
+        "price": 0.50,
+        "stock": 140
+    },
+
+    {
+        "id": 7007,
+        "name": "Clips metalicos sujección de tubos 25mm",
+        "description": "Clips metalicos sujección de tubos 25mm.",
+        "price": 0.50,
+        "stock": 40
+    }
+]
