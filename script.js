@@ -1,6 +1,6 @@
 // ===== CONFIGURACIÓN =====
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxN5BZ2TLNEOMD85LODRC3TCw5Kgdj_nesf0CIYUWhcf99dn3lyJBikVX0ng6C33duPNA/exec';
-const PASSWORD = 'inventario123';
+let products = [];
+let filteredProducts = [];
 
 // ===== VARIABLES GLOBALES =====
 const productsContainer = document.getElementById('products-container');
@@ -17,77 +17,138 @@ const lowStockCountElement = document.getElementById('low-stock-count');
 const totalCategoriesElement = document.getElementById('total-categories');
 const syncStatusElement = document.getElementById('sync-status');
 
-let products = [];
-let filteredProducts = [];
-
-// ===== FUNCIONES DE GOOGLE SHEETS =====
-async function testConnection() {
+// ===== FUNCIONES FIREBASE =====
+async function initFirebase() {
     try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=test`);
-        const data = await response.json();
-        return data.status === 'ok';
+        updateSyncStatus('syncing', 'Conectando a Firebase...');
+        
+        // Esperar autenticación
+        await new Promise((resolve, reject) => {
+            firebase.auth().onAuthStateChanged((user) => {
+                if (user) {
+                    console.log('✅ Usuario autenticado:', user.uid);
+                    resolve();
+                } else {
+                    reject('No se pudo autenticar');
+                }
+            });
+        });
+        
+        updateSyncStatus('success', 'Conectado ✅');
+        return true;
     } catch (error) {
-        console.warn('No hay conexión a Google Sheets');
+        console.error('Error Firebase:', error);
+        updateSyncStatus('error', 'Modo offline');
         return false;
     }
 }
 
-async function fetchProductsFromSheets() {
+async function fetchProductsFromFirebase() {
     try {
-        showLoading('Sincronizando con Google Sheets...');
+        showLoading('Cargando desde Firebase...');
         
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getProducts`);
+        const snapshot = await db.collection('productos').get();
+        const products = [];
         
-        if (!response.ok) {
-            throw new Error('Error de conexión');
-        }
+        snapshot.forEach(doc => {
+            products.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
         
-        const data = await response.json();
+        console.log(`✅ ${products.length} productos cargados de Firebase`);
         
-        if (data.status === 'success') {
-            localStorage.setItem('products_cache', JSON.stringify({
-                products: data.products,
-                timestamp: Date.now(),
-                fromSheets: true
-            }));
-            
-            updateSyncStatus('success', `Sincronizado (${data.products.length} productos)`);
-            return data.products;
-        } else {
-            throw new Error(data.message || 'Error desconocido');
-        }
+        // Guardar en localStorage como caché
+        localStorage.setItem('products_cache', JSON.stringify({
+            products: products,
+            timestamp: Date.now(),
+            fromFirebase: true
+        }));
+        
+        return products;
     } catch (error) {
-        console.warn('Error conectando a Google Sheets:', error);
-        updateSyncStatus('error', 'Modo offline');
+        console.error('Error cargando Firebase:', error);
         return loadFromCache();
     }
 }
 
-async function updateStockInSheets(productId, newStock) {
+async function saveProductToFirebase(product) {
     try {
-        const formData = new URLSearchParams();
-        formData.append('action', 'updateStock');
-        formData.append('id', productId);
-        formData.append('stock', newStock);
-        formData.append('password', PASSWORD);
+        if (product.id) {
+            // Actualizar producto existente
+            await db.collection('productos').doc(product.id.toString()).update({
+                name: product.name,
+                category: product.category,
+                description: product.description,
+                price: product.price,
+                stock: product.stock,
+                sku: product.sku,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            // Crear nuevo producto
+            const docRef = await db.collection('productos').add({
+                ...product,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            product.id = docRef.id;
+        }
         
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: formData
+        return true;
+    } catch (error) {
+        console.error('Error guardando en Firebase:', error);
+        return false;
+    }
+}
+
+async function updateStockInFirebase(productId, newStock) {
+    try {
+        await db.collection('productos').doc(productId.toString()).update({
+            stock: newStock,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        const data = await response.json();
-        
-        if (data.status === 'success') {
-            updateLocalCache(productId, newStock);
-            return true;
-        }
+        updateLocalCache(productId, newStock);
+        return true;
     } catch (error) {
-        console.warn('Error actualizando Google Sheets');
+        console.error('Error actualizando stock:', error);
         savePendingChange(productId, newStock);
         return false;
     }
-    return false;
+}
+
+async function importProductsToFirebase(productsArray) {
+    try {
+        showLoading('Importando a Firebase...');
+        
+        const batch = db.batch();
+        const productosRef = db.collection('productos');
+        
+        // Limpiar colección primero
+        const snapshot = await productosRef.get();
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        
+        // Agregar nuevos productos
+        productsArray.forEach(product => {
+            const docRef = productosRef.doc(product.id.toString());
+            batch.set(docRef, {
+                ...product,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        
+        await batch.commit();
+        console.log(`✅ ${productsArray.length} productos importados a Firebase`);
+        return true;
+    } catch (error) {
+        console.error('Error importando a Firebase:', error);
+        return false;
+    }
 }
 
 // ===== FUNCIONES DE CACHÉ =====
@@ -99,7 +160,8 @@ function loadFromCache() {
             const oneHour = 60 * 60 * 1000;
             
             if (Date.now() - data.timestamp < oneHour) {
-                updateSyncStatus('warning', 'Usando caché');
+                console.log(`📂 Cargando ${data.products.length} productos desde caché`);
+                updateSyncStatus('warning', `Caché (${data.products.length} productos)`);
                 return data.products;
             }
         }
@@ -107,17 +169,32 @@ function loadFromCache() {
         console.error('Error cargando caché:', error);
     }
     
+    console.log('Cargando desde archivos locales...');
     return loadFromLocalJSON();
 }
 
 async function loadFromLocalJSON() {
     try {
         showLoading('Cargando datos locales...');
+        
+        if (typeof cargarTodosLosProductos !== 'function') {
+            throw new Error('Función cargarTodosLosProductos no encontrada');
+        }
+        
         const productos = await cargarTodosLosProductos();
-        updateSyncStatus('warning', 'Modo local');
+        console.log(`📦 ${productos.length} productos cargados localmente`);
+        
+        localStorage.setItem('products_cache', JSON.stringify({
+            products: productos,
+            timestamp: Date.now(),
+            fromLocal: true
+        }));
+        
+        updateSyncStatus('warning', `Modo local (${productos.length} productos)`);
         return productos;
     } catch (error) {
-        console.error('Error cargando archivos locales:', error);
+        console.error('Error cargando locales:', error);
+        showNotification('Error cargando datos locales', 'error');
         return [];
     }
 }
@@ -145,10 +222,9 @@ function updateLocalCache(productId, newStock) {
 
 function savePendingChange(productId, newStock) {
     try {
-        const pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
+        let pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
         
-        const existingIndex = pending.findIndex(change => change.id == productId);
-        
+        const existingIndex = pending.findIndex(p => p.id == productId);
         if (existingIndex !== -1) {
             pending[existingIndex] = {
                 id: productId,
@@ -166,24 +242,6 @@ function savePendingChange(productId, newStock) {
         localStorage.setItem('pending_changes', JSON.stringify(pending));
     } catch (error) {
         console.error('Error guardando cambio pendiente:', error);
-    }
-}
-
-async function syncPendingChanges() {
-    try {
-        const pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
-        if (pending.length === 0) return;
-        
-        showNotification(`Sincronizando ${pending.length} cambios pendientes...`);
-        
-        for (const change of pending) {
-            await updateStockInSheets(change.id, change.stock);
-        }
-        
-        localStorage.removeItem('pending_changes');
-        showNotification('Cambios sincronizados correctamente');
-    } catch (error) {
-        console.error('Error sincronizando cambios:', error);
     }
 }
 
@@ -258,10 +316,10 @@ function renderProducts(productsArray) {
                     </div>
                 </div>
                 <div class="action-buttons">
-                    <button class="btn btn-outline" onclick="adjustStock(${product.id}, -1)">
+                    <button class="btn btn-outline" onclick="adjustStock('${product.id}', -1)">
                         <i class="fas fa-minus"></i> Reducir
                     </button>
-                    <button class="btn btn-primary" onclick="adjustStock(${product.id}, 1)">
+                    <button class="btn btn-primary" onclick="adjustStock('${product.id}', 1)">
                         <i class="fas fa-plus"></i> Aumentar
                     </button>
                 </div>
@@ -332,8 +390,9 @@ async function adjustStock(productId, change) {
             products[productIndex].stock = newStock;
             filterProducts();
             
-            // Intentar sincronizar
-            const synced = await updateStockInSheets(productId, newStock);
+            // Intentar sincronizar con Firebase
+            showNotification(`🔄 Actualizando "${productName}"...`, 'warning');
+            const synced = await updateStockInFirebase(productId, newStock);
             
             if (synced) {
                 showNotification(`✅ "${productName}" actualizado a ${newStock} unidades`, 'success');
@@ -393,7 +452,7 @@ function poblarFiltroCategorias() {
     });
 }
 
-function exportToJSON() {
+async function exportToJSON() {
     const data = {
         products: products,
         exportDate: new Date().toISOString(),
@@ -416,7 +475,7 @@ function exportToJSON() {
     showNotification('✅ Backup exportado correctamente');
 }
 
-function importFromJSON(file) {
+async function importFromJSON(file) {
     const reader = new FileReader();
     
     reader.onload = async function(e) {
@@ -427,20 +486,21 @@ function importFromJSON(file) {
                 throw new Error('Formato de archivo inválido');
             }
             
-            if (confirm(`¿Importar ${data.products.length} productos? Esto sobrescribirá los datos actuales.`)) {
-                showLoading('Importando productos...');
+            if (confirm(`¿Importar ${data.products.length} productos a Firebase? Esto sobrescribirá los datos actuales.`)) {
+                showLoading('Importando productos a Firebase...');
                 
-                products = data.products;
-                filteredProducts = [...products];
+                const success = await importProductsToFirebase(data.products);
                 
-                localStorage.setItem('products_cache', JSON.stringify({
-                    products: products,
-                    timestamp: Date.now()
-                }));
-                
-                renderProducts(filteredProducts);
-                updateStats();
-                showNotification(`✅ Importados ${products.length} productos`);
+                if (success) {
+                    // Recargar productos
+                    products = await fetchProductsFromFirebase();
+                    filteredProducts = [...products];
+                    renderProducts(filteredProducts);
+                    updateStats();
+                    showNotification(`✅ ${data.products.length} productos importados`, 'success');
+                } else {
+                    showNotification('❌ Error importando a Firebase', 'error');
+                }
             }
         } catch (error) {
             showNotification(`❌ Error importando: ${error.message}`, 'error');
@@ -454,16 +514,28 @@ async function manualSync() {
     updateSyncStatus('syncing', 'Sincronizando...');
     
     try {
-        await syncPendingChanges();
+        // Sincronizar cambios pendientes
+        const pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
+        if (pending.length > 0) {
+            showNotification(`Sincronizando ${pending.length} cambios pendientes...`, 'warning');
+            
+            for (const change of pending) {
+                await updateStockInFirebase(change.id, change.stock);
+            }
+            
+            localStorage.removeItem('pending_changes');
+            showNotification('✅ Cambios sincronizados', 'success');
+        }
         
-        const freshProducts = await fetchProductsFromSheets();
+        // Obtener datos actualizados
+        const freshProducts = await fetchProductsFromFirebase();
         
         if (freshProducts && freshProducts.length > 0) {
             products = freshProducts;
             filteredProducts = [...products];
             renderProducts(filteredProducts);
             updateStats();
-            showNotification('✅ Sincronización completada');
+            showNotification('✅ Sincronización completada', 'success');
         }
     } catch (error) {
         showNotification('❌ Error en sincronización', 'error');
@@ -473,8 +545,12 @@ async function manualSync() {
 
 // ===== INICIALIZACIÓN =====
 async function init() {
+    console.log('🚀 Inicializando StockMaster con Firebase...');
+    
+    // Poblar filtro de categorías
     poblarFiltroCategorias();
     
+    // Configurar event listeners
     searchInput.addEventListener('input', filterProducts);
     categoryFilter.addEventListener('change', filterProducts);
     stockFilter.addEventListener('change', filterProducts);
@@ -494,6 +570,7 @@ async function init() {
         if (modal) modal.style.display = 'block';
     });
     
+    // Configurar modal
     const modal = document.getElementById('backup-modal');
     if (modal) {
         const closeBtn = modal.querySelector('.close-modal');
@@ -525,12 +602,15 @@ async function init() {
         });
     }
     
+    // Inicializar Firebase
     updateSyncStatus('syncing', 'Conectando...');
-    const connected = await testConnection();
+    const connected = await initFirebase();
     
     if (connected) {
-        products = await fetchProductsFromSheets();
+        // Cargar desde Firebase
+        products = await fetchProductsFromFirebase();
     } else {
+        // Modo offline
         products = await loadFromLocalJSON();
     }
     
@@ -538,12 +618,9 @@ async function init() {
     renderProducts(filteredProducts);
     updateStats();
     
-    if (connected) {
-        setTimeout(syncPendingChanges, 2000);
-    }
-    
+    // Auto-sincronizar cada 5 minutos si hay conexión
     setInterval(async () => {
-        if (navigator.onLine) {
+        if (navigator.onLine && connected) {
             await manualSync();
         }
     }, 5 * 60 * 1000);
