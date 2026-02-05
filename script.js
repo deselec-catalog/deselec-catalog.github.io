@@ -828,7 +828,7 @@ async function manualSync() {
             renderProducts(filteredProducts);
             updateStats();
             showNotification('✅ Sincronización completada');
-        }
+        };
     } catch (error) {
         showNotification('❌ Error en sincronización', 'error');
         updateSyncStatus('error', 'Error sincronizando');
