@@ -1,208 +1,557 @@
 // ===== CONFIGURACIÓN =====
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxjS2V01X_JwsoFaauYZm8GI5LpIsRw_BlcoZR4eJDK9tLRocC4qk0Ay-jg1LHpoegNuA/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0Z8um8ItluuGL166574BIVHIeqQT1b60uflscRV1pji6nlo812SGnUR_Pbw-C2Zhd_g/exec';
+const PASSWORD = 'inventario123';
 
-// ===== FUNCIÓN DE PRUEBA =====
-async function testGoogleScript() {
-    console.log('🔍 Probando Google Apps Script...');
-    
-    // Mostrar mensaje de carga
-    const statusElement = document.getElementById('sync-status');
-    if (statusElement) {
-        statusElement.innerHTML = '🔄 Probando conexión...';
-    }
-    
+// ===== VARIABLES GLOBALES =====
+const productsContainer = document.getElementById('products-container');
+const searchInput = document.getElementById('search-input');
+const categoryFilter = document.getElementById('category-filter');
+const stockFilter = document.getElementById('stock-filter');
+const resetFiltersBtn = document.getElementById('reset-filters');
+const syncButton = document.getElementById('sync-button');
+const exportButton = document.getElementById('export-button');
+const totalProductsElement = document.getElementById('total-products');
+const totalItemsElement = document.getElementById('total-items');
+const availableProductsElement = document.getElementById('available-products');
+const lowStockCountElement = document.getElementById('low-stock-count');
+const totalCategoriesElement = document.getElementById('total-categories');
+const syncStatusElement = document.getElementById('sync-status');
+
+let products = [];
+let filteredProducts = [];
+
+// ===== FUNCIONES DE GOOGLE SHEETS =====
+async function testConnection() {
     try {
-        // URL de prueba
-        const testUrl = `${GOOGLE_SCRIPT_URL}?action=test&_=${Date.now()}`;
-        console.log('URL de prueba:', testUrl);
-        
-        // Hacer la petición
-        const response = await fetch(testUrl);
-        console.log('Estado:', response.status);
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log('Respuesta:', data);
-            
-            // Mostrar resultado
-            if (data.status === 'ok') {
-                const message = `✅ CONECTADO!\n\nGoogle Apps Script funcionando\nAcción: ${data.action || 'test'}\nHora: ${new Date(data.timestamp).toLocaleTimeString()}`;
-                alert(message);
-                
-                if (statusElement) {
-                    statusElement.innerHTML = '✅ Conectado a Google Sheets';
-                }
-                
-                return true;
-            } else {
-                alert(`❌ Error en respuesta: ${JSON.stringify(data, null, 2)}`);
-                return false;
-            }
-        } else {
-            const errorText = await response.text();
-            console.error('Error texto:', errorText);
-            
-            if (response.status === 401 || response.status === 403) {
-                alert(`❌ ERROR ${response.status}: ACCESO DENEGADO\n\nEl script no está configurado para acceso público.\n\nVe a Google Apps Script y:\n1. Haz clic en "Implementar"\n2. Selecciona "Nueva implementación"\n3. Configura "Quién tiene acceso" como "Cualquier persona"`);
-            } else if (response.status === 404) {
-                alert(`❌ ERROR 404: NO ENCONTRADO\n\nLa URL del script es incorrecta o no existe.\n\nURL actual: ${GOOGLE_SCRIPT_URL}`);
-            } else {
-                alert(`❌ ERROR ${response.status}: ${response.statusText}\n\n${errorText}`);
-            }
-            
-            return false;
-        }
-        
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=test`);
+        const data = await response.json();
+        return data.status === 'ok';
     } catch (error) {
-        console.error('Error completo:', error);
-        
-        let errorMessage = `❌ ERROR DE CONEXIÓN\n\n${error.name}: ${error.message}`;
-        
-        if (error.message.includes('Failed to fetch')) {
-            errorMessage += '\n\nPosibles causas:\n';
-            errorMessage += '1. La URL es incorrecta\n';
-            errorMessage += '2. El script no está publicado\n';
-            errorMessage += '3. Problemas de red/CORS\n';
-            errorMessage += '4. El script necesita permisos';
-        }
-        
-        errorMessage += `\n\nURL usada: ${GOOGLE_SCRIPT_URL}`;
-        
-        alert(errorMessage);
-        
-        if (statusElement) {
-            statusElement.innerHTML = '❌ Error de conexión';
-        }
-        
+        console.warn('No hay conexión a Google Sheets');
         return false;
     }
 }
 
-// ===== AGREGAR BOTÓN DE PRUEBA =====
-function addTestButton() {
-    // Buscar donde agregar el botón
-    const header = document.querySelector('header');
-    const controls = document.querySelector('.controls');
+async function fetchProductsFromSheets() {
+    try {
+        showLoading('Sincronizando con Google Sheets...');
+        
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getProducts`);
+        
+        if (!response.ok) {
+            throw new Error('Error de conexión');
+        }
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            localStorage.setItem('products_cache', JSON.stringify({
+                products: data.products,
+                timestamp: Date.now(),
+                fromSheets: true
+            }));
+            
+            updateSyncStatus('success', `Sincronizado (${data.products.length} productos)`);
+            return data.products;
+        } else {
+            throw new Error(data.message || 'Error desconocido');
+        }
+    } catch (error) {
+        console.warn('Error conectando a Google Sheets:', error);
+        updateSyncStatus('error', 'Modo offline');
+        return loadFromCache();
+    }
+}
+
+async function updateStockInSheets(productId, newStock) {
+    try {
+        const formData = new URLSearchParams();
+        formData.append('action', 'updateStock');
+        formData.append('id', productId);
+        formData.append('stock', newStock);
+        formData.append('password', PASSWORD);
+        
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            updateLocalCache(productId, newStock);
+            return true;
+        }
+    } catch (error) {
+        console.warn('Error actualizando Google Sheets');
+        savePendingChange(productId, newStock);
+        return false;
+    }
+    return false;
+}
+
+// ===== FUNCIONES DE CACHÉ =====
+function loadFromCache() {
+    try {
+        const cache = localStorage.getItem('products_cache');
+        if (cache) {
+            const data = JSON.parse(cache);
+            const oneHour = 60 * 60 * 1000;
+            
+            if (Date.now() - data.timestamp < oneHour) {
+                updateSyncStatus('warning', 'Usando caché');
+                return data.products;
+            }
+        }
+    } catch (error) {
+        console.error('Error cargando caché:', error);
+    }
     
-    if (!controls && !header) {
-        console.error('No se encontró donde agregar el botón');
+    return loadFromLocalJSON();
+}
+
+async function loadFromLocalJSON() {
+    try {
+        showLoading('Cargando datos locales...');
+        const productos = await cargarTodosLosProductos();
+        updateSyncStatus('warning', 'Modo local');
+        return productos;
+    } catch (error) {
+        console.error('Error cargando archivos locales:', error);
+        return [];
+    }
+}
+
+function updateLocalCache(productId, newStock) {
+    try {
+        const cache = localStorage.getItem('products_cache');
+        if (cache) {
+            const data = JSON.parse(cache);
+            
+            data.products = data.products.map(product => {
+                if (product.id == productId) {
+                    return { ...product, stock: newStock };
+                }
+                return product;
+            });
+            
+            data.timestamp = Date.now();
+            localStorage.setItem('products_cache', JSON.stringify(data));
+        }
+    } catch (error) {
+        console.error('Error actualizando caché:', error);
+    }
+}
+
+function savePendingChange(productId, newStock) {
+    try {
+        const pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
+        
+        const existingIndex = pending.findIndex(change => change.id == productId);
+        
+        if (existingIndex !== -1) {
+            pending[existingIndex] = {
+                id: productId,
+                stock: newStock,
+                timestamp: Date.now()
+            };
+        } else {
+            pending.push({
+                id: productId,
+                stock: newStock,
+                timestamp: Date.now()
+            });
+        }
+        
+        localStorage.setItem('pending_changes', JSON.stringify(pending));
+    } catch (error) {
+        console.error('Error guardando cambio pendiente:', error);
+    }
+}
+
+async function syncPendingChanges() {
+    try {
+        const pending = JSON.parse(localStorage.getItem('pending_changes') || '[]');
+        if (pending.length === 0) return;
+        
+        showNotification(`Sincronizando ${pending.length} cambios pendientes...`);
+        
+        for (const change of pending) {
+            await updateStockInSheets(change.id, change.stock);
+        }
+        
+        localStorage.removeItem('pending_changes');
+        showNotification('Cambios sincronizados correctamente');
+    } catch (error) {
+        console.error('Error sincronizando cambios:', error);
+    }
+}
+
+// ===== FUNCIONES DE INTERFAZ =====
+function updateSyncStatus(status, message) {
+    if (!syncStatusElement) return;
+    
+    const icons = {
+        'success': '✅',
+        'error': '❌',
+        'warning': '⚠️',
+        'syncing': '🔄'
+    };
+    
+    syncStatusElement.innerHTML = `${icons[status] || '🔄'} ${message}`;
+    syncStatusElement.className = `sync-status sync-${status}`;
+}
+
+function showLoading(message = 'Cargando...') {
+    productsContainer.innerHTML = `
+        <div class="no-results">
+            <i class="fas fa-spinner fa-spin"></i>
+            <h3>${message}</h3>
+        </div>
+    `;
+}
+
+function renderProducts(productsArray) {
+    productsContainer.innerHTML = '';
+
+    if (productsArray.length === 0) {
+        productsContainer.innerHTML = `
+            <div class="no-results">
+                <i class="fas fa-search"></i>
+                <h3>No se encontraron productos</h3>
+                <p>Intenta con otros términos de búsqueda o ajusta los filtros</p>
+            </div>
+        `;
         return;
     }
-    
-    // Crear botón
-    const testButton = document.createElement('button');
-    testButton.id = 'test-connection-btn';
-    testButton.className = 'btn btn-primary';
-    testButton.innerHTML = '<i class="fas fa-bug"></i> DEBUG Conexión';
-    testButton.style.margin = '10px';
-    testButton.style.backgroundColor = '#e74c3c';
-    testButton.style.borderColor = '#e74c3c';
-    
-    testButton.onclick = testGoogleScript;
-    
-    // Agregar botón
-    if (controls) {
-        controls.appendChild(testButton);
-    } else if (header) {
-        header.appendChild(testButton);
-    }
-    
-    console.log('✅ Botón de debug agregado');
-}
 
-// ===== PRUEBA AUTOMÁTICA =====
-async function autoTest() {
-    console.log('🔄 Prueba automática iniciada...');
-    
-    // Esperar 2 segundos para que la página cargue
-    setTimeout(async () => {
-        const connected = await testGoogleScript();
+    productsArray.forEach(product => {
+        const categoriaConfig = obtenerConfigCategoria(product.category);
         
-        if (!connected) {
-            // Si falla, mostrar instrucciones
-            console.log('Mostrando instrucciones de ayuda...');
-            showHelpInstructions();
+        let stockClass = 'high-stock';
+        if (product.stock <= 5) {
+            stockClass = 'low-stock';
+        } else if (product.stock <= 15) {
+            stockClass = 'medium-stock';
         }
-    }, 2000);
+
+        const productCard = document.createElement('div');
+        productCard.className = 'product-card';
+        productCard.innerHTML = `
+            <div class="product-image">
+                <i class="${categoriaConfig.icono}"></i>
+                <div class="${product.stock <= 5 ? 'stock-low' : 'stock-ok'}">
+                    ${product.stock <= 5 ? 'STOCK BAJO' : 'EN STOCK'}
+                </div>
+            </div>
+            <div class="product-info">
+                <div class="product-category">${categoriaConfig.nombre}</div>
+                <h3 class="product-name">${product.name}</h3>
+                <p class="product-description">${product.description}</p>
+            </div>
+            
+            <div class="product-bottom-bar">
+                <div class="price-stock-row">
+                    <div class="product-price">€${product.price.toFixed(2)}</div>
+                    <div class="product-stock">
+                        <span class="stock-amount ${stockClass}">${product.stock} unidades</span>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-outline" onclick="adjustStock(${product.id}, -1)">
+                        <i class="fas fa-minus"></i> Reducir
+                    </button>
+                    <button class="btn btn-primary" onclick="adjustStock(${product.id}, 1)">
+                        <i class="fas fa-plus"></i> Aumentar
+                    </button>
+                </div>
+            </div>
+        `;
+        productsContainer.appendChild(productCard);
+    });
 }
 
-function showHelpInstructions() {
-    // Crear panel de ayuda
-    const helpPanel = document.createElement('div');
-    helpPanel.id = 'help-panel';
-    helpPanel.style.cssText = `
+function updateStats() {
+    const totalItems = filteredProducts.reduce((sum, product) => sum + product.stock, 0);
+    const availableProducts = filteredProducts.filter(p => p.stock > 0).length;
+    const lowStockCount = filteredProducts.filter(p => p.stock <= 5).length;
+    const uniqueCategories = [...new Set(filteredProducts.map(p => p.category))].length;
+    
+    totalProductsElement.textContent = filteredProducts.length;
+    totalItemsElement.textContent = totalItems;
+    availableProductsElement.textContent = availableProducts;
+    lowStockCountElement.textContent = lowStockCount;
+    totalCategoriesElement.textContent = uniqueCategories;
+}
+
+function filterProducts() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const selectedCategory = categoryFilter.value;
+    const selectedStock = stockFilter.value;
+
+    filteredProducts = products.filter(product => {
+        if (!product) return false;
+        
+        const searchMatch = searchTerm === '' || 
+            (product.name && product.name.toLowerCase().includes(searchTerm)) ||
+            (product.description && product.description.toLowerCase().includes(searchTerm));
+        
+        const categoryMatch = selectedCategory === 'todas' || product.category === selectedCategory;
+        
+        let stockMatch = true;
+        if (selectedStock !== 'all') {
+            switch (selectedStock) {
+                case 'low': stockMatch = product.stock <= 5; break;
+                case 'medium': stockMatch = product.stock > 5 && product.stock <= 15; break;
+                case 'high': stockMatch = product.stock > 15; break;
+            }
+        }
+        
+        return searchMatch && categoryMatch && stockMatch;
+    });
+
+    renderProducts(filteredProducts);
+    updateStats();
+}
+
+async function adjustStock(productId, change) {
+    const productIndex = products.findIndex(p => p.id == productId);
+    
+    if (productIndex !== -1) {
+        const newStock = Math.max(0, products[productIndex].stock + change);
+        
+        if (newStock < 0) {
+            alert("El stock no puede ser negativo");
+            return;
+        }
+        
+        const productName = products[productIndex].name;
+        
+        try {
+            // Actualizar localmente inmediatamente
+            products[productIndex].stock = newStock;
+            filterProducts();
+            
+            // Intentar sincronizar
+            const synced = await updateStockInSheets(productId, newStock);
+            
+            if (synced) {
+                showNotification(`✅ "${productName}" actualizado a ${newStock} unidades`, 'success');
+            } else {
+                showNotification(`⚠️ "${productName}" guardado localmente`, 'warning');
+            }
+        } catch (error) {
+            console.error('Error ajustando stock:', error);
+            showNotification(`❌ Error actualizando stock`, 'error');
+        }
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
         position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 30px;
-        border-radius: 10px;
-        box-shadow: 0 0 30px rgba(0,0,0,0.3);
-        z-index: 9999;
-        max-width: 600px;
-        width: 90%;
-        border: 3px solid #e74c3c;
+        bottom: 20px;
+        right: 20px;
+        background-color: ${type === 'error' ? '#e74c3c' : type === 'warning' ? '#f39c12' : '#2ecc71'};
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 300px;
     `;
     
-    helpPanel.innerHTML = `
-        <h2 style="color: #e74c3c; margin-top: 0;">⚠️ CONFIGURACIÓN REQUERIDA</h2>
-        
-        <p><strong>Problema:</strong> No se puede conectar a Google Sheets</p>
-        
-        <h3>📋 Pasos para solucionar:</h3>
-        
-        <ol style="text-align: left;">
-            <li><strong>Verifica la URL del script:</strong><br>
-            <code style="background: #f0f0f0; padding: 5px;">${GOOGLE_SCRIPT_URL}</code></li>
-            
-            <li><strong>Abre Google Apps Script:</strong><br>
-            <a href="https://script.google.com" target="_blank">https://script.google.com</a></li>
-            
-            <li><strong>Configura los permisos:</strong>
-                <ul>
-                    <li>Haz clic en "Implementar"</li>
-                    <li>Selecciona "Nueva implementación"</li>
-                    <li>Tipo: "Aplicación web"</li>
-                    <li>Ejecutar como: "Yo" (tu cuenta)</li>
-                    <li><strong style="color: #e74c3c;">Quién tiene acceso: "Cualquier persona"</strong></li>
-                    <li>Haz clic en "Implementar"</li>
-                </ul>
-            </li>
-            
-            <li><strong>Copia la nueva URL</strong> y actualízala en script.js</li>
-        </ol>
-        
-        <div style="margin-top: 20px;">
-            <button onclick="document.getElementById('help-panel').remove();" 
-                    style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                Cerrar
-            </button>
-            
-            <button onclick="window.open('https://script.google.com', '_blank');" 
-                    style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-                Abrir Google Apps Script
-            </button>
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation-circle' : 'check-circle'}"></i>
+            <span>${message}</span>
         </div>
     `;
     
-    document.body.appendChild(helpPanel);
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
+
+function poblarFiltroCategorias() {
+    const categorias = obtenerListaCategorias();
+    
+    categorias.forEach(categoriaKey => {
+        const config = obtenerConfigCategoria(categoriaKey);
+        const option = document.createElement('option');
+        option.value = categoriaKey;
+        option.textContent = config.nombre;
+        categoryFilter.appendChild(option);
+    });
+}
+
+function exportToJSON() {
+    const data = {
+        products: products,
+        exportDate: new Date().toISOString(),
+        totalProducts: products.length,
+        version: '2.0'
+    };
+    
+    const dataStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `stockmaster_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showNotification('✅ Backup exportado correctamente');
+}
+
+function importFromJSON(file) {
+    const reader = new FileReader();
+    
+    reader.onload = async function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            
+            if (!data.products || !Array.isArray(data.products)) {
+                throw new Error('Formato de archivo inválido');
+            }
+            
+            if (confirm(`¿Importar ${data.products.length} productos? Esto sobrescribirá los datos actuales.`)) {
+                showLoading('Importando productos...');
+                
+                products = data.products;
+                filteredProducts = [...products];
+                
+                localStorage.setItem('products_cache', JSON.stringify({
+                    products: products,
+                    timestamp: Date.now()
+                }));
+                
+                renderProducts(filteredProducts);
+                updateStats();
+                showNotification(`✅ Importados ${products.length} productos`);
+            }
+        } catch (error) {
+            showNotification(`❌ Error importando: ${error.message}`, 'error');
+        }
+    };
+    
+    reader.readAsText(file);
+}
+
+async function manualSync() {
+    updateSyncStatus('syncing', 'Sincronizando...');
+    
+    try {
+        await syncPendingChanges();
+        
+        const freshProducts = await fetchProductsFromSheets();
+        
+        if (freshProducts && freshProducts.length > 0) {
+            products = freshProducts;
+            filteredProducts = [...products];
+            renderProducts(filteredProducts);
+            updateStats();
+            showNotification('✅ Sincronización completada');
+        }
+    } catch (error) {
+        showNotification('❌ Error en sincronización', 'error');
+        updateSyncStatus('error', 'Error sincronizando');
+    }
 }
 
 // ===== INICIALIZACIÓN =====
-function init() {
-    console.log('🚀 Inicializando aplicación...');
+async function init() {
+    poblarFiltroCategorias();
     
-    // Agregar botón de prueba
-    addTestButton();
+    searchInput.addEventListener('input', filterProducts);
+    categoryFilter.addEventListener('change', filterProducts);
+    stockFilter.addEventListener('change', filterProducts);
     
-    // Ejecutar prueba automática
-    autoTest();
+    resetFiltersBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        categoryFilter.value = 'todas';
+        stockFilter.value = 'all';
+        filterProducts();
+        showNotification('Filtros restablecidos');
+    });
+    
+    syncButton.addEventListener('click', manualSync);
+    
+    exportButton.addEventListener('click', () => {
+        const modal = document.getElementById('backup-modal');
+        if (modal) modal.style.display = 'block';
+    });
+    
+    const modal = document.getElementById('backup-modal');
+    if (modal) {
+        const closeBtn = modal.querySelector('.close-modal');
+        const exportBtn = document.getElementById('export-json');
+        const importBtn = document.getElementById('import-json');
+        const importFile = document.getElementById('import-file');
+        
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+        
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+        
+        exportBtn.addEventListener('click', exportToJSON);
+        
+        importBtn.addEventListener('click', () => {
+            importFile.click();
+        });
+        
+        importFile.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                importFromJSON(e.target.files[0]);
+                modal.style.display = 'none';
+            }
+        });
+    }
+    
+    updateSyncStatus('syncing', 'Conectando...');
+    const connected = await testConnection();
+    
+    if (connected) {
+        products = await fetchProductsFromSheets();
+    } else {
+        products = await loadFromLocalJSON();
+    }
+    
+    filteredProducts = [...products];
+    renderProducts(filteredProducts);
+    updateStats();
+    
+    if (connected) {
+        setTimeout(syncPendingChanges, 2000);
+    }
+    
+    setInterval(async () => {
+        if (navigator.onLine) {
+            await manualSync();
+        }
+    }, 5 * 60 * 1000);
 }
 
-// Iniciar cuando cargue la página
+// Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', init);
 
-// Hacer función disponible globalmente
-window.testGoogleScript = testGoogleScript;
-window.showHelpInstructions = showHelpInstructions;
+// Hacer funciones globales
+window.adjustStock = adjustStock;
+window.showNotification = showNotification;
