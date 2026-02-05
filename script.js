@@ -3,20 +3,6 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0Z8um8Itluu
 const PASSWORD = 'inventario123';
 
 // ===== VARIABLES GLOBALES =====
-const productsContainer = document.getElementById('products-container');
-const searchInput = document.getElementById('search-input');
-const categoryFilter = document.getElementById('category-filter');
-const stockFilter = document.getElementById('stock-filter');
-const resetFiltersBtn = document.getElementById('reset-filters');
-const syncButton = document.getElementById('sync-button');
-const exportButton = document.getElementById('export-button');
-const totalProductsElement = document.getElementById('total-products');
-const totalItemsElement = document.getElementById('total-items');
-const availableProductsElement = document.getElementById('available-products');
-const lowStockCountElement = document.getElementById('low-stock-count');
-const totalCategoriesElement = document.getElementById('total-categories');
-const syncStatusElement = document.getElementById('sync-status');
-
 let products = [];
 let filteredProducts = [];
 
@@ -171,6 +157,7 @@ async function syncPendingChanges() {
 
 // ===== FUNCIONES DE INTERFAZ BÁSICAS =====
 function updateSyncStatus(status, message) {
+    const syncStatusElement = document.getElementById('sync-status');
     if (!syncStatusElement) return;
     
     const icons = {
@@ -185,6 +172,9 @@ function updateSyncStatus(status, message) {
 }
 
 function showLoading(message = 'Cargando...') {
+    const productsContainer = document.getElementById('products-container');
+    if (!productsContainer) return;
+    
     productsContainer.innerHTML = `
         <div class="no-results">
             <i class="fas fa-spinner fa-spin"></i>
@@ -194,6 +184,9 @@ function showLoading(message = 'Cargando...') {
 }
 
 function renderProducts(productsArray) {
+    const productsContainer = document.getElementById('products-container');
+    if (!productsContainer) return;
+    
     productsContainer.innerHTML = '';
 
     if (productsArray.length === 0) {
@@ -262,6 +255,14 @@ function renderProducts(productsArray) {
 }
 
 function updateStats() {
+    const totalProductsElement = document.getElementById('total-products');
+    const totalItemsElement = document.getElementById('total-items');
+    const availableProductsElement = document.getElementById('available-products');
+    const lowStockCountElement = document.getElementById('low-stock-count');
+    const totalCategoriesElement = document.getElementById('total-categories');
+    
+    if (!totalProductsElement || !totalItemsElement) return;
+    
     const totalItems = filteredProducts.reduce((sum, product) => sum + product.stock, 0);
     const availableProducts = filteredProducts.filter(p => p.stock > 0).length;
     const lowStockCount = filteredProducts.filter(p => p.stock <= 5).length;
@@ -275,6 +276,12 @@ function updateStats() {
 }
 
 function filterProducts() {
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const stockFilter = document.getElementById('stock-filter');
+    
+    if (!searchInput || !categoryFilter || !stockFilter) return;
+    
     const searchTerm = searchInput.value.toLowerCase();
     const selectedCategory = categoryFilter.value;
     const selectedStock = stockFilter.value;
@@ -358,7 +365,9 @@ function showNotification(message, type = 'info') {
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease-out';
         setTimeout(() => {
-            document.body.removeChild(notification);
+            if (notification.parentNode) {
+                document.body.removeChild(notification);
+            }
         }, 300);
     }, 3000);
 }
@@ -492,6 +501,8 @@ function cerrarModalAgregarProducto() {
 
 function poblarCategoriasEnModal() {
     const select = document.getElementById('product-category');
+    if (!select) return;
+    
     const categorias = obtenerListaCategorias();
     
     categorias.forEach(categoriaKey => {
@@ -646,6 +657,8 @@ function mostrarModalEditarProducto(producto) {
 
 function poblarCategoriasEnModalEdicion(categoriaActual) {
     const select = document.getElementById('edit-product-category');
+    if (!select) return;
+    
     const categorias = obtenerListaCategorias();
     
     categorias.forEach(categoriaKey => {
@@ -744,6 +757,12 @@ function eliminarProducto(productId) {
 
 // ===== FUNCIONES DE FILTRO Y CATEGORÍAS =====
 function poblarFiltroCategorias() {
+    const categoryFilter = document.getElementById('category-filter');
+    if (!categoryFilter) {
+        console.warn('No se encontró el elemento category-filter');
+        return;
+    }
+    
     const categorias = obtenerListaCategorias();
     
     categorias.forEach(categoriaKey => {
@@ -828,7 +847,7 @@ async function manualSync() {
             renderProducts(filteredProducts);
             updateStats();
             showNotification('✅ Sincronización completada');
-        };
+        }
     } catch (error) {
         showNotification('❌ Error en sincronización', 'error');
         updateSyncStatus('error', 'Error sincronizando');
@@ -837,28 +856,41 @@ async function manualSync() {
 
 // ===== INICIALIZACIÓN =====
 async function init() {
+    console.log('🚀 Inicializando StockMaster...');
+    
     // Poblar filtro de categorías
     poblarFiltroCategorias();
     
     // Configurar event listeners
-    searchInput.addEventListener('input', filterProducts);
-    categoryFilter.addEventListener('change', filterProducts);
-    stockFilter.addEventListener('change', filterProducts);
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const stockFilter = document.getElementById('stock-filter');
+    const resetFiltersBtn = document.getElementById('reset-filters');
+    const syncButton = document.getElementById('sync-button');
+    const exportButton = document.getElementById('export-button');
     
-    resetFiltersBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        categoryFilter.value = 'todas';
-        stockFilter.value = 'all';
-        filterProducts();
-        showNotification('Filtros restablecidos');
-    });
+    if (searchInput) searchInput.addEventListener('input', filterProducts);
+    if (categoryFilter) categoryFilter.addEventListener('change', filterProducts);
+    if (stockFilter) stockFilter.addEventListener('change', filterProducts);
     
-    syncButton.addEventListener('click', manualSync);
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => {
+            if (searchInput) searchInput.value = '';
+            if (categoryFilter) categoryFilter.value = 'todas';
+            if (stockFilter) stockFilter.value = 'all';
+            filterProducts();
+            showNotification('Filtros restablecidos');
+        });
+    }
     
-    exportButton.addEventListener('click', () => {
-        const modal = document.getElementById('backup-modal');
-        if (modal) modal.style.display = 'block';
-    });
+    if (syncButton) syncButton.addEventListener('click', manualSync);
+    
+    if (exportButton) {
+        exportButton.addEventListener('click', () => {
+            const modal = document.getElementById('backup-modal');
+            if (modal) modal.style.display = 'block';
+        });
+    }
     
     // Configurar modal de backup
     const modal = document.getElementById('backup-modal');
@@ -868,7 +900,7 @@ async function init() {
         const importBtn = document.getElementById('import-json');
         const importFile = document.getElementById('import-file');
         
-        closeBtn.addEventListener('click', () => {
+        if (closeBtn) closeBtn.addEventListener('click', () => {
             modal.style.display = 'none';
         });
         
@@ -878,18 +910,22 @@ async function init() {
             }
         });
         
-        exportBtn.addEventListener('click', exportToJSON);
+        if (exportBtn) exportBtn.addEventListener('click', exportToJSON);
         
-        importBtn.addEventListener('click', () => {
-            importFile.click();
-        });
+        if (importBtn) {
+            importBtn.addEventListener('click', () => {
+                if (importFile) importFile.click();
+            });
+        }
         
-        importFile.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                importFromJSON(e.target.files[0]);
-                modal.style.display = 'none';
-            }
-        });
+        if (importFile) {
+            importFile.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                    importFromJSON(e.target.files[0]);
+                    modal.style.display = 'none';
+                }
+            });
+        }
     }
     
     // Agregar botón para nuevo producto
