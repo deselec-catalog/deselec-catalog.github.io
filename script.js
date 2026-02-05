@@ -624,6 +624,13 @@ async function init() {
             await manualSync();
         }
     }, 5 * 60 * 1000);
+
+    async function init() {
+    // ... código existente ...
+    
+    // Agregar interfaz para nuevos productos
+    crearInterfazAgregarProducto();
+    crearInterfazImportarCSV();
 }
 
 // Inicializar cuando se carga la página
