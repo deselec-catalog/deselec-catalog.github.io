@@ -632,3 +632,193 @@ document.addEventListener('DOMContentLoaded', init);
 // Hacer funciones globales
 window.adjustStock = adjustStock;
 window.showNotification = showNotification;
+
+// ===== FUNCIONES PARA AÑADIR PRODUCTOS =====
+function crearInterfazAgregarProducto() {
+    // Buscar donde agregar el botón
+    const controls = document.querySelector('.controls');
+    if (!controls) return;
+    
+    // Botón para agregar producto
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-success';
+    addBtn.id = 'add-product-btn';
+    addBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Agregar Producto';
+    addBtn.style.marginLeft = '10px';
+    
+    addBtn.addEventListener('click', () => {
+        mostrarModalAgregarProducto();
+    });
+    
+    controls.appendChild(addBtn);
+}
+
+function mostrarModalAgregarProducto() {
+    // Crear modal
+    const modal = document.createElement('div');
+    modal.id = 'add-product-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    `;
+    
+    // Contenido del modal
+    modal.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0;"><i class="fas fa-plus-circle"></i> Agregar Nuevo Producto</h3>
+                <button onclick="document.getElementById('add-product-modal').remove()" 
+                        style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">
+                    &times;
+                </button>
+            </div>
+            
+            <form id="product-form">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">ID</label>
+                        <input type="number" id="product-id" required 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Categoría</label>
+                        <select id="product-category" required 
+                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="">Seleccionar categoría</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nombre del Producto</label>
+                    <input type="text" id="product-name" required 
+                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Descripción</label>
+                    <textarea id="product-description" rows="3"
+                              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"></textarea>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Precio (€)</label>
+                        <input type="number" id="product-price" step="0.01" required 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Stock Inicial</label>
+                        <input type="number" id="product-stock" required 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">SKU (opcional)</label>
+                        <input type="text" id="product-sku" 
+                               style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="document.getElementById('add-product-modal').remove()" 
+                            style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        <i class="fas fa-save"></i> Guardar Producto
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Poblar categorías en el select
+    poblarCategoriasEnModal();
+    
+    // Manejar envío del formulario
+    document.getElementById('product-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await guardarNuevoProducto();
+    });
+}
+
+function poblarCategoriasEnModal() {
+    const select = document.getElementById('product-category');
+    const categorias = obtenerListaCategorias();
+    
+    categorias.forEach(categoriaKey => {
+        const config = obtenerConfigCategoria(categoriaKey);
+        const option = document.createElement('option');
+        option.value = categoriaKey;
+        option.textContent = config.nombre;
+        select.appendChild(option);
+    });
+}
+
+async function guardarNuevoProducto() {
+    try {
+        const nuevoProducto = {
+            id: parseInt(document.getElementById('product-id').value),
+            name: document.getElementById('product-name').value,
+            category: document.getElementById('product-category').value,
+            description: document.getElementById('product-description').value,
+            price: parseFloat(document.getElementById('product-price').value),
+            stock: parseInt(document.getElementById('product-stock').value),
+            sku: document.getElementById('product-sku').value || ''
+        };
+        
+        // Verificar que no exista un producto con el mismo ID
+        if (products.some(p => p.id === nuevoProducto.id)) {
+            alert(`❌ Ya existe un producto con el ID ${nuevoProducto.id}`);
+            return;
+        }
+        
+        // Agregar al array local
+        products.push(nuevoProducto);
+        
+        // Si estamos usando Firebase
+        if (typeof db !== 'undefined' && db) {
+            const success = await saveProductToFirebase(nuevoProducto);
+            if (success) {
+                showNotification(`✅ "${nuevoProducto.name}" guardado en Firebase`, 'success');
+            } else {
+                showNotification(`⚠️ "${nuevoProducto.name}" guardado localmente`, 'warning');
+                // Guardar en cambios pendientes
+                savePendingChange(nuevoProducto.id, nuevoProducto.stock);
+            }
+        } else {
+            // Solo modo local
+            localStorage.setItem('products_cache', JSON.stringify({
+                products: products,
+                timestamp: Date.now()
+            }));
+            showNotification(`✅ "${nuevoProducto.name}" guardado localmente`, 'success');
+        }
+        
+        // Actualizar interfaz
+        filteredProducts = [...products];
+        renderProducts(filteredProducts);
+        updateStats();
+        
+        // Cerrar modal
+        document.getElementById('add-product-modal').remove();
+        
+    } catch (error) {
+        console.error('Error guardando producto:', error);
+        alert(`❌ Error: ${error.message}`);
+    }
+}
