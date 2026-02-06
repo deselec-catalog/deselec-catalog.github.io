@@ -3,44 +3,81 @@ const categoriasConfig = {
     'Cintas': {
         nombre: 'Cintas',
         icono: 'fas fa-tools',
-        archivo: 'productos/cintas.json',
         color: '#797d81'
     },
 
     'PVC': {
         nombre: 'PVC',
         icono: 'fas fa-tools',
-        archivo: 'productos/pvc.json',
         color: '#797d81'
     },
 
     'Varillas': {
         nombre: 'Varillas',
         icono: 'fas fa-tools',
-        archivo: 'productos/varillas.json',
         color: '#797d81'
     },
 
     'Cables': {
         nombre: 'Cables',
         icono: 'fas fa-tools',
-        archivo: 'productos/cables.json',
         color: '#797d81'
     },
 
     'Abrazaderas': {
         nombre: 'Abrazaderas',
         icono: 'fas fa-tools',
-        archivo: 'productos/abrazaderas.json',
         color: '#797d81'
     },
 
     'Soportes': {
         nombre: 'Soportes',
         icono: 'fas fa-tools',
-        archivo: 'productos/soportes.json',
         color: '#797d81'
     },
+
+    'Coquillas': {
+        nombre: 'Soportes',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Tubería Chapa': {
+        nombre: 'Tubería Chapa',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Cobre': {
+        nombre: 'Cobre',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Electricidad': {
+        nombre: 'Electricidad',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Tornilleria': {
+        nombre: 'Tornilleria',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Otros': {
+        nombre: 'Otros',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+
+    'Mantenimiento': {
+        nombre: 'Mantenimiento',
+        icono: 'fas fa-tools',
+        color: '#797d81'
+    },
+    
 };
 
 // Función para cargar productos de una categoría
