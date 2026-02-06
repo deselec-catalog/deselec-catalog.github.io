@@ -37,7 +37,7 @@ const categoriasConfig = {
     },
 
     'Coquillas': {
-        nombre: 'Soportes',
+        nombre: 'Coquillas',
         icono: 'fas fa-tools',
         color: '#797d81'
     },
