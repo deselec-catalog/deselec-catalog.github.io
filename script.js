@@ -82,7 +82,8 @@ async function fetchProductsFromFirebase() {
             throw new Error('Firestore no inicializado');
         }
 
-        const snapshot = await db.collection('productos').orderBy('id').get();
+        // 🔥 SOLUCIÓN: Obtener TODOS los documentos sin ordenar
+        const snapshot = await db.collection('productos').get();
         const productos = [];
 
         snapshot.forEach(doc => {
@@ -98,7 +99,15 @@ async function fetchProductsFromFirebase() {
             });
         });
 
+        // 🔥 Ordenar por ID numérico en JavaScript (NO en Firebase)
+        productos.sort((a, b) => {
+            const idA = parseInt(a.id) || 0;
+            const idB = parseInt(b.id) || 0;
+            return idA - idB;
+        });
+
         console.log(`✅ ${productos.length} productos cargados de Firebase`);
+        console.log('IDs cargados:', productos.map(p => p.id).slice(0, 10)); // Verificar IDs
 
         localStorage.setItem('products_cache', JSON.stringify({
             products: productos,
