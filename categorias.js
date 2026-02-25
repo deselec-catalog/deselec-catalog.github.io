@@ -7,11 +7,9 @@ const categoriasConfig = {
     'Abrazaderas': { nombre: 'Abrazaderas', icono: 'fas fa-link', color: '#e67e22' },
     'Soportes': { nombre: 'Soportes', icono: 'fas fa-bracket', color: '#3498db' },
     'Herramientas': { nombre: 'Herramientas', icono: 'fas fa-wrench', color: '#9b59b6' },
-    'Tuberías': { nombre: 'Tuberías', icono: 'fas fa-grip-lines', color: '#1abc9c' },
+    'Tubería chapa': { nombre: 'Tuberías', icono: 'fas fa-grip-lines', color: '#1abc9c' },
     'Cobre': { nombre: 'Cobre', icono: 'fas fa-copper', color: '#b87333' },
-    'Cables Especiales': { nombre: 'Cables Especiales', icono: 'fas fa-bolt', color: '#f1c40f' },
-    'Componentes': { nombre: 'Componentes', icono: 'fas fa-microchip', color: '#2ecc71' },
-    'Accesorios': { nombre: 'Accesorios', icono: 'fas fa-plug', color: '#e74c3c' },
+    'Mantenimiento': { nombre: 'Cables Especiales', icono: 'fas fa-bolt', color: '#f1c40f' },
     'Otros': { nombre: 'Otros', icono: 'fas fa-archive', color: '#95a5a6' }
 };
 

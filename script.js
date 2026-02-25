@@ -1,39 +1,41 @@
-// ===== VARIABLES GLOBALES =====
+// ===== VARIABLES GLOBALES (SOLO UNA VEZ) =====
 let products = [];
-let db = null;
+let filteredProducts = [];
 
 // Lista de categorías
 const CATEGORIAS = [
     'Cintas', 'PVC', 'Varillas', 'Cables', 'Abrazaderas', 
-    'Soportes', 'Herramientas', 'Tuberías', 'Cobre',
-    'Cables Especiales', 'Componentes', 'Accesorios', 'Otros'
+    'Soportes', 'Herramientas', 'Tubería chapa', 'Cobre',
+    'Mantenimiento', 'Otros'
 ];
 
 // Ubicaciones
 const UBICACIONES = [
-    { id: 'almacen1', nombre: '🏭 Almacén 1' },
-    { id: 'almacen2', nombre: '🏢 Almacén 2' },
-    { id: 'almacen3', nombre: '🏬 Almacén 3' }
+    { id: 'almacen1', nombre: '🏭 Almacén' },
+    { id: 'almacen2', nombre: '🏢 Cisterna' },
+    { id: 'almacen3', nombre: '🏬 Contenedor' }
 ];
 
 // ===== FUNCIÓN DE CONEXIÓN =====
 async function conectarFirebase() {
     const statusEl = document.getElementById('sync-status');
+    if (!statusEl) return false;
+    
     statusEl.innerHTML = '🔄 Conectando...';
     
     try {
-        // Verificar Firebase
+        // Verificar que Firebase está disponible
         if (typeof firebase === 'undefined') {
-            throw new Error('Firebase no está cargado');
+            throw new Error('Firebase SDK no cargado');
         }
 
-        // Inicializar Firestore
-        db = firebase.firestore();
-        
-        // Configurar persistencia (opcional)
-        db.settings({ 
-            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED 
-        });
+        // Verificar que hay una app inicializada
+        if (firebase.apps.length === 0) {
+            throw new Error('Firebase no inicializado - revisa firebase-config.js');
+        }
+
+        // Verificar Firestore
+        const testDb = firebase.firestore();
         
         // Autenticación anónima
         await firebase.auth().signInAnonymously();
@@ -44,17 +46,7 @@ async function conectarFirebase() {
         
     } catch (error) {
         console.error('❌ Error:', error);
-        
-        // Mostrar error específico
-        if (error.code === 'auth/invalid-api-key') {
-            statusEl.innerHTML = '❌ API Key inválida';
-            alert('❌ ERROR: La API Key de Firebase es incorrecta\n\nRevisa firebase-config.js');
-        } else if (error.code === 'auth/network-request-failed') {
-            statusEl.innerHTML = '❌ Sin internet';
-        } else {
-            statusEl.innerHTML = '❌ Error';
-        }
-        
+        statusEl.innerHTML = '❌ Error';
         return false;
     }
 }
@@ -62,10 +54,14 @@ async function conectarFirebase() {
 // ===== CARGAR PRODUCTOS =====
 async function cargarProductos() {
     const container = document.getElementById('products-container');
+    if (!container) return;
+    
     container.innerHTML = '<div class="no-results"><i class="fas fa-spinner fa-spin"></i><h3>Cargando...</h3></div>';
     
     try {
+        const db = firebase.firestore();
         const snapshot = await db.collection('productos').get();
+        
         products = [];
         
         snapshot.forEach(doc => {
@@ -81,9 +77,14 @@ async function cargarProductos() {
             });
         });
         
-        console.log(`📦 ${products.length} productos`);
-        mostrarProductos(products);
-        actualizarStats(products);
+        console.log(`📦 ${products.length} productos cargados`);
+        
+        // Ordenar por ID
+        products.sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
+        
+        filteredProducts = [...products];
+        mostrarProductos(filteredProducts);
+        actualizarStats(filteredProducts);
         llenarFiltros();
         
     } catch (error) {
@@ -95,6 +96,8 @@ async function cargarProductos() {
 // ===== MOSTRAR PRODUCTOS =====
 function mostrarProductos(productosAMostrar) {
     const container = document.getElementById('products-container');
+    if (!container) return;
+    
     container.innerHTML = '';
     
     if (productosAMostrar.length === 0) {
@@ -107,8 +110,14 @@ function mostrarProductos(productosAMostrar) {
         card.className = 'product-card';
         
         let stockClass = 'high-stock';
-        if (product.stock <= 5) stockClass = 'low-stock';
-        else if (product.stock <= 15) stockClass = 'medium-stock';
+        let stockText = 'Stock alto';
+        if (product.stock <= 5) {
+            stockClass = 'low-stock';
+            stockText = '¡STOCK BAJO!';
+        } else if (product.stock <= 15) {
+            stockClass = 'medium-stock';
+            stockText = 'Stock medio';
+        }
         
         const ubicacion = UBICACIONES.find(u => u.id === product.ubicacion)?.nombre || 'Almacén 1';
         
@@ -129,6 +138,7 @@ function mostrarProductos(productosAMostrar) {
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn btn-outline" onclick="ajustarStock('${product.id}', -1)">- Reducir</button>
                     <button class="btn btn-primary" onclick="ajustarStock('${product.id}', 1)">+ Aumentar</button>
+                    <button class="btn btn-outline" onclick="eliminarProducto('${product.id}')" style="background: #e74c3c; color: white;">🗑️</button>
                 </div>
             </div>
         `;
@@ -144,31 +154,48 @@ window.ajustarStock = async function(id, cambio) {
     producto.stock = Math.max(0, producto.stock + cambio);
     
     try {
+        const db = firebase.firestore();
         await db.collection('productos').doc(id.toString()).update({
             stock: producto.stock
         });
-        mostrarProductos(products);
-        actualizarStats(products);
+        filtrarProductos();
     } catch (error) {
         console.error('Error:', error);
         alert('Error al actualizar');
     }
 }
 
+// ===== ELIMINAR PRODUCTO =====
+window.eliminarProducto = async function(id) {
+    if (!confirm('¿Eliminar producto?')) return;
+    
+    try {
+        const db = firebase.firestore();
+        await db.collection('productos').doc(id.toString()).delete();
+        products = products.filter(p => p.id != id);
+        filtrarProductos();
+        llenarFiltros();
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al eliminar');
+    }
+}
+
 // ===== ACTUALIZAR ESTADÍSTICAS =====
 function actualizarStats(productosArray) {
-    document.getElementById('total-products').textContent = productosArray.length;
-    document.getElementById('total-items').textContent = productosArray.reduce((s, p) => s + p.stock, 0);
-    document.getElementById('available-products').textContent = productosArray.filter(p => p.stock > 0).length;
-    document.getElementById('low-stock-count').textContent = productosArray.filter(p => p.stock <= 5).length;
-    document.getElementById('total-categories').textContent = [...new Set(productosArray.map(p => p.category))].length;
+    const el = (id) => document.getElementById(id);
+    if (!el('total-products')) return;
+    
+    el('total-products').textContent = productosArray.length;
+    el('total-items').textContent = productosArray.reduce((s, p) => s + p.stock, 0);
+    el('available-products').textContent = productosArray.filter(p => p.stock > 0).length;
+    el('low-stock-count').textContent = productosArray.filter(p => p.stock <= 5).length;
+    el('total-categories').textContent = [...new Set(productosArray.map(p => p.category))].length;
 }
 
 // ===== LLENAR FILTROS =====
 function llenarFiltros() {
     const catFilter = document.getElementById('category-filter');
-    const ubicFilter = document.getElementById('ubicacion-filter');
-    
     if (catFilter) {
         catFilter.innerHTML = '<option value="todas">Todas las categorías</option>';
         const categorias = [...new Set(products.map(p => p.category))].sort();
@@ -180,26 +207,47 @@ function llenarFiltros() {
         });
     }
     
-    if (ubicFilter) {
-        ubicFilter.innerHTML = '<option value="todas">📍 Todas las ubicaciones</option>';
-        UBICACIONES.forEach(ubic => {
-            const option = document.createElement('option');
-            option.value = ubic.id;
-            option.textContent = ubic.nombre;
-            ubicFilter.appendChild(option);
-        });
+    // Crear filtro de ubicaciones si no existe
+    if (!document.getElementById('ubicacion-filter')) {
+        const filterGroup = document.querySelector('.filter-group');
+        if (filterGroup) {
+            const select = document.createElement('select');
+            select.id = 'ubicacion-filter';
+            select.className = 'filter-select';
+            select.style.marginLeft = '10px';
+            select.innerHTML = '<option value="todas">📍 Todas las ubicaciones</option>';
+            
+            UBICACIONES.forEach(ubic => {
+                const option = document.createElement('option');
+                option.value = ubic.id;
+                option.textContent = ubic.nombre;
+                select.appendChild(option);
+            });
+            
+            const stockFilter = document.getElementById('stock-filter');
+            if (stockFilter && stockFilter.parentNode) {
+                stockFilter.parentNode.insertBefore(select, stockFilter.nextSibling);
+            }
+        }
     }
 }
 
 // ===== FILTRAR =====
-function filtrar() {
-    const search = document.getElementById('search-input').value.toLowerCase();
-    const cat = document.getElementById('category-filter').value;
-    const ubic = document.getElementById('ubicacion-filter').value;
-    const stock = document.getElementById('stock-filter').value;
+function filtrarProductos() {
+    const searchInput = document.getElementById('search-input');
+    const catFilter = document.getElementById('category-filter');
+    const ubicFilter = document.getElementById('ubicacion-filter');
+    const stockFilter = document.getElementById('stock-filter');
     
-    const filtrados = products.filter(p => {
-        const matchSearch = !search || p.name.toLowerCase().includes(search) || p.description?.toLowerCase().includes(search);
+    if (!searchInput || !catFilter || !stockFilter) return;
+    
+    const search = searchInput.value.toLowerCase();
+    const cat = catFilter.value;
+    const ubic = ubicFilter ? ubicFilter.value : 'todas';
+    const stock = stockFilter.value;
+    
+    filteredProducts = products.filter(p => {
+        const matchSearch = !search || p.name.toLowerCase().includes(search) || (p.description && p.description.toLowerCase().includes(search));
         const matchCat = cat === 'todas' || p.category === cat;
         const matchUbic = ubic === 'todas' || p.ubicacion === ubic;
         
@@ -211,8 +259,8 @@ function filtrar() {
         return matchSearch && matchCat && matchUbic && matchStock;
     });
     
-    mostrarProductos(filtrados);
-    actualizarStats(filtrados);
+    mostrarProductos(filteredProducts);
+    actualizarStats(filteredProducts);
 }
 
 // ===== MODAL AGREGAR =====
@@ -290,11 +338,12 @@ async function guardarProducto() {
     };
     
     try {
+        const db = firebase.firestore();
         await db.collection('productos').doc(id.toString()).set(nuevo);
         products.push(nuevo);
         cerrarModal();
         llenarFiltros();
-        filtrar();
+        filtrarProductos();
         alert('✅ Producto guardado');
     } catch (error) {
         console.error('Error:', error);
@@ -302,61 +351,67 @@ async function guardarProducto() {
     }
 }
 
-// ===== INICIAR =====
-async function iniciar() {
-    // Crear filtro ubicaciones si no existe
-    if (!document.getElementById('ubicacion-filter')) {
-        const filterGroup = document.querySelector('.filter-group');
-        if (filterGroup) {
-            const select = document.createElement('select');
-            select.id = 'ubicacion-filter';
-            select.className = 'filter-select';
-            select.style.marginLeft = '10px';
-            select.innerHTML = '<option value="todas">📍 Todas las ubicaciones</option>';
-            
-            const stockFilter = document.getElementById('stock-filter');
-            if (stockFilter && stockFilter.parentNode) {
-                stockFilter.parentNode.insertBefore(select, stockFilter.nextSibling);
+// ===== CONFIGURAR EVENTOS =====
+function configurarEventos() {
+    const searchInput = document.getElementById('search-input');
+    const catFilter = document.getElementById('category-filter');
+    const stockFilter = document.getElementById('stock-filter');
+    const resetBtn = document.getElementById('reset-filters');
+    const syncBtn = document.getElementById('sync-button');
+    const exportBtn = document.getElementById('export-button');
+    
+    if (searchInput) searchInput.addEventListener('input', filtrarProductos);
+    if (catFilter) catFilter.addEventListener('change', filtrarProductos);
+    if (stockFilter) stockFilter.addEventListener('change', filtrarProductos);
+    
+    // Evento para filtro de ubicación (se agregará después)
+    setTimeout(() => {
+        const ubicFilter = document.getElementById('ubicacion-filter');
+        if (ubicFilter) ubicFilter.addEventListener('change', filtrarProductos);
+    }, 500);
+    
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            if (searchInput) searchInput.value = '';
+            if (catFilter) catFilter.value = 'todas';
+            const ubicFilter = document.getElementById('ubicacion-filter');
+            if (ubicFilter) ubicFilter.value = 'todas';
+            if (stockFilter) stockFilter.value = 'all';
+            filtrarProductos();
+        });
+    }
+    
+    if (syncBtn) {
+        syncBtn.addEventListener('click', async () => {
+            await cargarProductos();
+        });
+    }
+    
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            try {
+                firebase.firestore(); // Verificar que Firebase está listo
+                mostrarModalAgregar();
+            } catch (e) {
+                alert('❌ Firebase no está listo');
             }
-        }
-    }
-    
-    // Configurar eventos
-    document.getElementById('search-input').addEventListener('input', filtrar);
-    document.getElementById('category-filter').addEventListener('change', filtrar);
-    document.getElementById('stock-filter').addEventListener('change', filtrar);
-    if (document.getElementById('ubicacion-filter')) {
-        document.getElementById('ubicacion-filter').addEventListener('change', filtrar);
-    }
-    
-    document.getElementById('reset-filters').addEventListener('click', () => {
-        document.getElementById('search-input').value = '';
-        document.getElementById('category-filter').value = 'todas';
-        if (document.getElementById('ubicacion-filter')) {
-            document.getElementById('ubicacion-filter').value = 'todas';
-        }
-        document.getElementById('stock-filter').value = 'all';
-        filtrar();
-    });
-    
-    document.getElementById('sync-button').addEventListener('click', async () => {
-        await cargarProductos();
-    });
-    
-    document.getElementById('export-button').addEventListener('click', () => {
-        if (db) {
-            mostrarModalAgregar();
-        } else {
-            alert('❌ Espera a que se conecte Firebase');
-        }
-    });
-    
-    // Conectar y cargar
-    const conectado = await conectarFirebase();
-    if (conectado) {
-        await cargarProductos();
+        });
     }
 }
 
-// Iniciar
+// ===== INICIAR =====
+async function iniciar() {
+    console.log('🚀 Iniciando...');
+    
+    const conectado = await conectarFirebase();
+    
+    if (conectado) {
+        await cargarProductos();
+        configurarEventos();
+    } else {
+        document.getElementById('sync-status').innerHTML = '❌ Error de conexión';
+    }
+}
+
+// Iniciar cuando cargue la página
 document.addEventListener('DOMContentLoaded', iniciar);
