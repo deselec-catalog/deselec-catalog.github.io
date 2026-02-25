@@ -1,4 +1,4 @@
-// ===== VARIABLES GLOBALES (SOLO UNA VEZ) =====
+// ===== VARIABLES GLOBALES =====
 let products = [];
 let filteredProducts = [];
 
@@ -11,9 +11,9 @@ const CATEGORIAS = [
 
 // Ubicaciones
 const UBICACIONES = [
-    { id: 'almacen', nombre: '🏭 Almacén' },
-    { id: 'cisterna', nombre: '🏢 Cisterna' },
-    { id: 'contenedor', nombre: '🏬 Contenedor' }
+    { id: 'Almacen', nombre: '🏭 Almacén' },
+    { id: 'Cisterna', nombre: '🏢 Cisterna' },
+    { id: 'Contenedor', nombre: '🏬 Contenedor' }
 ];
 
 // ===== FUNCIÓN DE CONEXIÓN =====
@@ -24,20 +24,14 @@ async function conectarFirebase() {
     statusEl.innerHTML = '🔄 Conectando...';
     
     try {
-        // Verificar que Firebase está disponible
         if (typeof firebase === 'undefined') {
             throw new Error('Firebase SDK no cargado');
         }
 
-        // Verificar que hay una app inicializada
         if (firebase.apps.length === 0) {
-            throw new Error('Firebase no inicializado - revisa firebase-config.js');
+            throw new Error('Firebase no inicializado');
         }
 
-        // Verificar Firestore
-        const testDb = firebase.firestore();
-        
-        // Autenticación anónima
         await firebase.auth().signInAnonymously();
         
         console.log('✅ Conectado a Firebase');
@@ -79,7 +73,6 @@ async function cargarProductos() {
         
         console.log(`📦 ${products.length} productos cargados`);
         
-        // Ordenar por ID
         products.sort((a, b) => (parseInt(a.id) || 0) - (parseInt(b.id) || 0));
         
         filteredProducts = [...products];
@@ -93,7 +86,7 @@ async function cargarProductos() {
     }
 }
 
-// ===== MOSTRAR PRODUCTOS =====
+// ===== MOSTRAR PRODUCTOS CON BOTÓN EDITAR =====
 function mostrarProductos(productosAMostrar) {
     const container = document.getElementById('products-container');
     if (!container) return;
@@ -135,50 +128,19 @@ function mostrarProductos(productosAMostrar) {
                         <span class="stock-amount ${stockClass}">${product.stock} uds</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn btn-outline" onclick="ajustarStock('${product.id}', -1)">- Reducir</button>
-                    <button class="btn btn-primary" onclick="ajustarStock('${product.id}', 1)">+ Aumentar</button>
-                    <button class="btn btn-outline" onclick="eliminarProducto('${product.id}')" style="background: #e74c3c; color: white;">🗑️</button>
+                <div style="display: flex; gap: 10px; margin-top: 15px; justify-content: space-between;">
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn btn-outline" onclick="ajustarStock('${product.id}', -1)">-1</button>
+                        <button class="btn btn-primary" onclick="ajustarStock('${product.id}', 1)">+1</button>
+                    </div>
+                    <button class="btn btn-edit" onclick="mostrarModalEditar('${product.id}')" style="background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 5px;">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
                 </div>
             </div>
         `;
         container.appendChild(card);
     });
-}
-
-// ===== AJUSTAR STOCK =====
-window.ajustarStock = async function(id, cambio) {
-    const producto = products.find(p => p.id == id);
-    if (!producto) return;
-    
-    producto.stock = Math.max(0, producto.stock + cambio);
-    
-    try {
-        const db = firebase.firestore();
-        await db.collection('productos').doc(id.toString()).update({
-            stock: producto.stock
-        });
-        filtrarProductos();
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al actualizar');
-    }
-}
-
-// ===== ELIMINAR PRODUCTO =====
-window.eliminarProducto = async function(id) {
-    if (!confirm('¿Eliminar producto?')) return;
-    
-    try {
-        const db = firebase.firestore();
-        await db.collection('productos').doc(id.toString()).delete();
-        products = products.filter(p => p.id != id);
-        filtrarProductos();
-        llenarFiltros();
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error al eliminar');
-    }
 }
 
 // ===== ACTUALIZAR ESTADÍSTICAS =====
@@ -191,6 +153,280 @@ function actualizarStats(productosArray) {
     el('available-products').textContent = productosArray.filter(p => p.stock > 0).length;
     el('low-stock-count').textContent = productosArray.filter(p => p.stock <= 5).length;
     el('total-categories').textContent = [...new Set(productosArray.map(p => p.category))].length;
+}
+
+// ===== AJUSTAR STOCK RÁPIDO =====
+window.ajustarStock = async function(id, cambio) {
+    const producto = products.find(p => p.id == id);
+    if (!producto) return;
+    
+    const nuevoStock = Math.max(0, producto.stock + cambio);
+    
+    try {
+        const db = firebase.firestore();
+        await db.collection('productos').doc(id.toString()).update({
+            stock: nuevoStock
+        });
+        
+        producto.stock = nuevoStock;
+        filtrarProductos();
+        mostrarNotificacion(`✅ Stock ${cambio > 0 ? 'aumentado' : 'reducido'}`);
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('❌ Error', 'error');
+    }
+}
+
+// ===== MODAL EDITAR PRODUCTO (COMPLETO) =====
+window.mostrarModalEditar = function(id) {
+    const producto = products.find(p => p.id == id);
+    if (!producto) return;
+    
+    const modal = document.createElement('div');
+    modal.id = 'modal-editar';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center;
+        z-index: 2000;
+    `;
+    
+    const categoriasOptions = CATEGORIAS.map(c => {
+        const selected = c === producto.category ? 'selected' : '';
+        return `<option value="${c}" ${selected}>${c}</option>`;
+    }).join('');
+    
+    const ubicacionesOptions = UBICACIONES.map(u => {
+        const selected = u.id === producto.ubicacion ? 'selected' : '';
+        return `<option value="${u.id}" ${selected}>${u.nombre}</option>`;
+    }).join('');
+    
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:10px; width:90%; max-width:500px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0;"><i class="fas fa-edit"></i> Editar Producto</h3>
+                <button onclick="cerrarModalEditar()" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            
+            <form id="form-editar">
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">ID:</label>
+                    <input type="number" id="editar-id" value="${producto.id}" readonly style="width:100%; padding:8px; background:#f5f5f5; border:1px solid #ddd; border-radius:4px;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Nombre:</label>
+                    <input type="text" id="editar-nombre" value="${producto.name.replace(/"/g, '&quot;')}" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Categoría:</label>
+                    <select id="editar-categoria" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                        ${categoriasOptions}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Ubicación:</label>
+                    <select id="editar-ubicacion" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                        ${ubicacionesOptions}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Descripción:</label>
+                    <textarea id="editar-descripcion" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">${producto.description || ''}</textarea>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="font-weight:bold;">Precio (€):</label>
+                        <input type="number" id="editar-precio" value="${producto.price}" step="0.01" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold;">Stock:</label>
+                        <input type="number" id="editar-stock" value="${producto.stock}" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    </div>
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" onclick="cerrarModalEditar()" style="padding:10px 20px; background:#e74c3c; color:white; border:none; border-radius:5px; cursor:pointer;">
+                        Cancelar
+                    </button>
+                    <button type="submit" style="padding:10px 20px; background:#2ecc71; color:white; border:none; border-radius:5px; cursor:pointer;">
+                        <i class="fas fa-save"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('form-editar').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await guardarEdicion(id);
+    });
+}
+
+window.cerrarModalEditar = function() {
+    const modal = document.getElementById('modal-editar');
+    if (modal) modal.remove();
+}
+
+async function guardarEdicion(id) {
+    try {
+        const productoActualizado = {
+            id: parseInt(id),
+            name: document.getElementById('editar-nombre').value,
+            category: document.getElementById('editar-categoria').value,
+            ubicacion: document.getElementById('editar-ubicacion').value,
+            description: document.getElementById('editar-descripcion').value,
+            price: parseFloat(document.getElementById('editar-precio').value),
+            stock: parseInt(document.getElementById('editar-stock').value)
+        };
+        
+        const db = firebase.firestore();
+        await db.collection('productos').doc(id.toString()).update(productoActualizado);
+        
+        // Actualizar en array local
+        const index = products.findIndex(p => p.id == id);
+        if (index !== -1) {
+            products[index] = productoActualizado;
+        }
+        
+        cerrarModalEditar();
+        filtrarProductos();
+        llenarFiltros();
+        mostrarNotificacion('✅ Producto actualizado');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('❌ Error al actualizar', 'error');
+    }
+}
+
+// ===== MODAL AGREGAR PRODUCTO =====
+function mostrarModalAgregar() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-agregar';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center;
+        z-index: 2000;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background:white; padding:30px; border-radius:10px; width:90%; max-width:500px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0;"><i class="fas fa-plus-circle"></i> Agregar Producto</h3>
+                <button onclick="cerrarModalAgregar()" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
+            
+            <form id="form-agregar">
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">ID:</label>
+                    <input type="number" id="nuevo-id" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Nombre:</label>
+                    <input type="text" id="nuevo-nombre" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Categoría:</label>
+                    <select id="nuevo-categoria" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                        <option value="">Seleccionar...</option>
+                        ${CATEGORIAS.map(c => `<option value="${c}">${c}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Ubicación:</label>
+                    <select id="nuevo-ubicacion" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                        <option value="">Seleccionar...</option>
+                        ${UBICACIONES.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div style="margin-bottom:15px;">
+                    <label style="font-weight:bold;">Descripción:</label>
+                    <textarea id="nuevo-descripcion" rows="2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+                    <div>
+                        <label style="font-weight:bold;">Precio (€):</label>
+                        <input type="number" id="nuevo-precio" step="0.01" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="font-weight:bold;">Stock:</label>
+                        <input type="number" id="nuevo-stock" required style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    </div>
+                </div>
+                
+                <div style="display:flex; gap:10px; justify-content:flex-end;">
+                    <button type="button" onclick="cerrarModalAgregar()" style="padding:10px 20px; background:#e74c3c; color:white; border:none; border-radius:5px;">Cancelar</button>
+                    <button type="submit" style="padding:10px 20px; background:#2ecc71; color:white; border:none; border-radius:5px;">Guardar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('form-agregar').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await guardarProducto();
+    });
+}
+
+window.cerrarModalAgregar = () => document.getElementById('modal-agregar')?.remove();
+
+async function guardarProducto() {
+    const id = parseInt(document.getElementById('nuevo-id').value);
+    
+    if (products.some(p => p.id == id)) {
+        mostrarNotificacion('❌ ID ya existe', 'error');
+        return;
+    }
+    
+    const nuevo = {
+        id: id,
+        name: document.getElementById('nuevo-nombre').value,
+        category: document.getElementById('nuevo-categoria').value,
+        ubicacion: document.getElementById('nuevo-ubicacion').value,
+        description: document.getElementById('nuevo-descripcion').value,
+        price: parseFloat(document.getElementById('nuevo-precio').value),
+        stock: parseInt(document.getElementById('nuevo-stock').value)
+    };
+    
+    try {
+        const db = firebase.firestore();
+        await db.collection('productos').doc(id.toString()).set(nuevo);
+        products.push(nuevo);
+        cerrarModalAgregar();
+        llenarFiltros();
+        filtrarProductos();
+        mostrarNotificacion('✅ Producto guardado');
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('❌ Error al guardar', 'error');
+    }
+}
+
+// ===== NOTIFICACIONES =====
+function mostrarNotificacion(texto, tipo = 'success') {
+    const notif = document.createElement('div');
+    notif.style.cssText = `
+        position: fixed; bottom: 20px; right: 20px; 
+        background: ${tipo === 'success' ? '#2ecc71' : '#e74c3c'}; 
+        color: white; padding: 15px 20px; border-radius: 8px;
+        z-index: 3000; animation: slideIn 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    notif.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'}"></i> ${texto}`;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 3000);
 }
 
 // ===== LLENAR FILTROS =====
@@ -206,33 +442,9 @@ function llenarFiltros() {
             catFilter.appendChild(option);
         });
     }
-    
-    // Crear filtro de ubicaciones si no existe
-    if (!document.getElementById('ubicacion-filter')) {
-        const filterGroup = document.querySelector('.filter-group');
-        if (filterGroup) {
-            const select = document.createElement('select');
-            select.id = 'ubicacion-filter';
-            select.className = 'filter-select';
-            select.style.marginLeft = '10px';
-            select.innerHTML = '<option value="todas">📍 Todas las ubicaciones</option>';
-            
-            UBICACIONES.forEach(ubic => {
-                const option = document.createElement('option');
-                option.value = ubic.id;
-                option.textContent = ubic.nombre;
-                select.appendChild(option);
-            });
-            
-            const stockFilter = document.getElementById('stock-filter');
-            if (stockFilter && stockFilter.parentNode) {
-                stockFilter.parentNode.insertBefore(select, stockFilter.nextSibling);
-            }
-        }
-    }
 }
 
-// ===== FILTRAR =====
+// ===== FILTRAR PRODUCTOS =====
 function filtrarProductos() {
     const searchInput = document.getElementById('search-input');
     const catFilter = document.getElementById('category-filter');
@@ -263,91 +475,76 @@ function filtrarProductos() {
     actualizarStats(filteredProducts);
 }
 
-// ===== MODAL AGREGAR =====
-function mostrarModalAgregar() {
-    const modal = document.createElement('div');
-    modal.id = 'modal-agregar';
-    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;justify-content:center;align-items:center;z-index:1000;';
+// ===== REORGANIZAR BOTONES =====
+function reorganizarControles() {
+    const controls = document.querySelector('.controls');
+    if (!controls) return;
     
-    modal.innerHTML = `
-        <div style="background:white;padding:30px;border-radius:10px;width:90%;max-width:500px;">
-            <h3 style="margin-top:0;">➕ Agregar Producto</h3>
-            <form id="form-agregar">
-                <div style="margin-bottom:15px;">
-                    <label>ID:</label>
-                    <input type="number" id="nuevo-id" required style="width:100%;padding:8px;">
-                </div>
-                <div style="margin-bottom:15px;">
-                    <label>Nombre:</label>
-                    <input type="text" id="nuevo-nombre" required style="width:100%;padding:8px;">
-                </div>
-                <div style="margin-bottom:15px;">
-                    <label>Categoría:</label>
-                    <select id="nuevo-categoria" required style="width:100%;padding:8px;">
-                        ${CATEGORIAS.map(c => `<option value="${c}">${c}</option>`).join('')}
-                    </select>
-                </div>
-                <div style="margin-bottom:15px;">
-                    <label>Ubicación:</label>
-                    <select id="nuevo-ubicacion" required style="width:100%;padding:8px;">
-                        ${UBICACIONES.map(u => `<option value="${u.id}">${u.nombre}</option>`).join('')}
-                    </select>
-                </div>
-                <div style="margin-bottom:15px;">
-                    <label>Descripción:</label>
-                    <textarea id="nuevo-descripcion" rows="2" style="width:100%;padding:8px;"></textarea>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px;">
-                    <div><label>Precio €:</label><input type="number" id="nuevo-precio" step="0.01" required style="width:100%;padding:8px;"></div>
-                    <div><label>Stock:</label><input type="number" id="nuevo-stock" required style="width:100%;padding:8px;"></div>
-                </div>
-                <div style="display:flex;gap:10px;justify-content:flex-end;">
-                    <button type="button" onclick="cerrarModal()" style="padding:10px20px;background:#e74c3c;color:white;border:none;border-radius:5px;">Cancelar</button>
-                    <button type="submit" style="padding:10px20px;background:#2ecc71;color:white;border:none;border-radius:5px;">Guardar</button>
-                </div>
-            </form>
-        </div>
-    `;
+    // Hacer que el contenedor sea flex con espacio entre
+    controls.style.display = 'flex';
+    controls.style.justifyContent = 'space-between';
+    controls.style.alignItems = 'center';
+    controls.style.flexWrap = 'wrap';
+    controls.style.gap = '10px';
     
-    document.body.appendChild(modal);
+    // Grupo izquierdo (búsqueda)
+    const searchBox = document.querySelector('.search-box');
     
-    document.getElementById('form-agregar').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        await guardarProducto();
+    // Grupo derecho (botones)
+    const rightGroup = document.createElement('div');
+    rightGroup.className = 'button-group-right';
+    rightGroup.style.display = 'flex';
+    rightGroup.style.gap = '10px';
+    rightGroup.style.flexWrap = 'wrap';
+    
+    // Mover los botones al grupo derecho
+    const buttons = [
+        document.getElementById('reset-filters'),
+        document.getElementById('sync-button'),
+        document.getElementById('export-button')
+    ].filter(btn => btn);
+    
+    buttons.forEach(btn => {
+        if (btn && btn.parentNode === controls) {
+            controls.removeChild(btn);
+            rightGroup.appendChild(btn);
+        }
     });
-}
-
-window.cerrarModal = () => document.getElementById('modal-agregar')?.remove();
-
-async function guardarProducto() {
-    const id = parseInt(document.getElementById('nuevo-id').value);
     
-    if (products.some(p => p.id == id)) {
-        alert('❌ ID ya existe');
-        return;
-    }
+    // Crear botón "Agregar Producto"
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-success';
+    addBtn.id = 'add-product-button';
+    addBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Agregar Producto';
+    addBtn.onclick = () => mostrarModalAgregar();
+    rightGroup.appendChild(addBtn);
     
-    const nuevo = {
-        id: id,
-        name: document.getElementById('nuevo-nombre').value,
-        category: document.getElementById('nuevo-categoria').value,
-        ubicacion: document.getElementById('nuevo-ubicacion').value,
-        description: document.getElementById('nuevo-descripcion').value,
-        price: parseFloat(document.getElementById('nuevo-precio').value),
-        stock: parseInt(document.getElementById('nuevo-stock').value)
-    };
+    // Agregar grupo derecho al controls
+    controls.appendChild(rightGroup);
     
-    try {
-        const db = firebase.firestore();
-        await db.collection('productos').doc(id.toString()).set(nuevo);
-        products.push(nuevo);
-        cerrarModal();
-        llenarFiltros();
-        filtrarProductos();
-        alert('✅ Producto guardado');
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Error al guardar');
+    // Crear filtro de ubicaciones si no existe
+    if (!document.getElementById('ubicacion-filter')) {
+        const filterGroup = document.querySelector('.filter-group');
+        if (filterGroup) {
+            const select = document.createElement('select');
+            select.id = 'ubicacion-filter';
+            select.className = 'filter-select';
+            select.innerHTML = '<option value="todas">📍 Todas las ubicaciones</option>';
+            
+            UBICACIONES.forEach(ubic => {
+                const option = document.createElement('option');
+                option.value = ubic.id;
+                option.textContent = ubic.nombre;
+                select.appendChild(option);
+            });
+            
+            select.addEventListener('change', filtrarProductos);
+            
+            const stockFilter = document.getElementById('stock-filter');
+            if (stockFilter && stockFilter.parentNode) {
+                stockFilter.parentNode.insertBefore(select, stockFilter.nextSibling);
+            }
+        }
     }
 }
 
@@ -358,17 +555,13 @@ function configurarEventos() {
     const stockFilter = document.getElementById('stock-filter');
     const resetBtn = document.getElementById('reset-filters');
     const syncBtn = document.getElementById('sync-button');
-    const exportBtn = document.getElementById('export-button');
     
     if (searchInput) searchInput.addEventListener('input', filtrarProductos);
     if (catFilter) catFilter.addEventListener('change', filtrarProductos);
     if (stockFilter) stockFilter.addEventListener('change', filtrarProductos);
     
-    // Evento para filtro de ubicación (se agregará después)
-    setTimeout(() => {
-        const ubicFilter = document.getElementById('ubicacion-filter');
-        if (ubicFilter) ubicFilter.addEventListener('change', filtrarProductos);
-    }, 500);
+    const ubicFilter = document.getElementById('ubicacion-filter');
+    if (ubicFilter) ubicFilter.addEventListener('change', filtrarProductos);
     
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
@@ -378,23 +571,14 @@ function configurarEventos() {
             if (ubicFilter) ubicFilter.value = 'todas';
             if (stockFilter) stockFilter.value = 'all';
             filtrarProductos();
+            mostrarNotificacion('Filtros restablecidos');
         });
     }
     
     if (syncBtn) {
         syncBtn.addEventListener('click', async () => {
             await cargarProductos();
-        });
-    }
-    
-    if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-            try {
-                firebase.firestore(); // Verificar que Firebase está listo
-                mostrarModalAgregar();
-            } catch (e) {
-                alert('❌ Firebase no está listo');
-            }
+            mostrarNotificacion('✅ Datos sincronizados');
         });
     }
 }
@@ -402,6 +586,8 @@ function configurarEventos() {
 // ===== INICIAR =====
 async function iniciar() {
     console.log('🚀 Iniciando...');
+    
+    reorganizarControles();
     
     const conectado = await conectarFirebase();
     
@@ -413,5 +599,38 @@ async function iniciar() {
     }
 }
 
-// Iniciar cuando cargue la página
+// Estilos adicionales
+const style = document.createElement('style');
+style.textContent = `
+    .btn-edit {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+    }
+    .btn-edit:hover {
+        background: #2980b9;
+    }
+    .btn-success {
+        background: #2ecc71;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .btn-success:hover {
+        background: #27ae60;
+    }
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
+
 document.addEventListener('DOMContentLoaded', iniciar);
