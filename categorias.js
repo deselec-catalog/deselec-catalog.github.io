@@ -1,86 +1,73 @@
-// Configuración de categorías
+// ===== CONFIGURACIÓN DE CATEGORÍAS =====
 const categoriasConfig = {
     'Cintas': {
         nombre: 'Cintas',
-        icono: 'fas fa-tools',
+        icono: 'fas fa-tape',
         color: '#797d81'
     },
-
     'PVC': {
         nombre: 'PVC',
         icono: 'fas fa-tools',
         color: '#797d81'
     },
-
     'Varillas': {
         nombre: 'Varillas',
         icono: 'fas fa-tools',
         color: '#797d81'
     },
-
     'Cables': {
         nombre: 'Cables',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+        icono: 'fas fa-bolt',
+        color: '#f39c12'
     },
-
     'Abrazaderas': {
         nombre: 'Abrazaderas',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+        icono: 'fas fa-link',
+        color: '#e67e22'
     },
-
     'Soportes': {
         nombre: 'Soportes',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+        icono: 'fas fa-bracket',
+        color: '#3498db'
     },
-
-    'Coquillas': {
-        nombre: 'Coquillas',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+    'Herramientas': {
+        nombre: 'Herramientas',
+        icono: 'fas fa-wrench',
+        color: '#9b59b6'
     },
-
-    'Tubería Chapa': {
-        nombre: 'Tubería Chapa',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+    'Tuberías': {
+        nombre: 'Tuberías',
+        icono: 'fas fa-grip-lines',
+        color: '#1abc9c'
     },
-
     'Cobre': {
         nombre: 'Cobre',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+        icono: 'fas fa-copper',
+        color: '#b87333'
     },
-
-    'Electricidad': {
-        nombre: 'Electricidad',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+    'Cables Especiales': {
+        nombre: 'Cables Especiales',
+        icono: 'fas fa-bolt',
+        color: '#f1c40f'
     },
-
-    'Tornilleria': {
-        nombre: 'Tornilleria',
-        icono: 'fas fa-tools',
-        color: '#797d81'
+    'Componentes': {
+        nombre: 'Componentes',
+        icono: 'fas fa-microchip',
+        color: '#2ecc71'
     },
-
+    'Accesorios': {
+        nombre: 'Accesorios',
+        icono: 'fas fa-plug',
+        color: '#e74c3c'
+    },
     'Otros': {
         nombre: 'Otros',
-        icono: 'fas fa-tools',
-        color: '#797d81'
-    },
-
-    'Mantenimiento': {
-        nombre: 'Mantenimiento',
-        icono: 'fas fa-tools',
-        color: '#797d81'
-    },
-    
+        icono: 'fas fa-archive',
+        color: '#95a5a6'
+    }
 };
 
-// Función para cargar productos de una categoría
+// ===== FUNCIÓN PARA CARGAR PRODUCTOS DE UNA CATEGORÍA =====
 async function cargarProductosPorCategoria(categoriaKey) {
     try {
         const config = categoriasConfig[categoriaKey];
@@ -88,10 +75,10 @@ async function cargarProductosPorCategoria(categoriaKey) {
         if (!response.ok) throw new Error(`Error al cargar ${config.nombre}`);
         
         const productos = await response.json();
-        // Agregar la categoría a cada producto
         return productos.map(producto => ({
             ...producto,
-            category: categoriaKey
+            category: categoriaKey,
+            ubicacion: producto.ubicacion || 'almacen1'
         }));
     } catch (error) {
         console.error('Error cargando productos:', error);
@@ -99,19 +86,21 @@ async function cargarProductosPorCategoria(categoriaKey) {
     }
 }
 
-// Función para cargar TODOS los productos
+// ===== FUNCIÓN PARA CARGAR TODOS LOS PRODUCTOS =====
 async function cargarTodosLosProductos() {
     let todosProductos = [];
     
     for (const categoriaKey in categoriasConfig) {
-        const productosCategoria = await cargarProductosPorCategoria(categoriaKey);
-        todosProductos = todosProductos.concat(productosCategoria);
+        if (categoriasConfig[categoriaKey].archivo) {
+            const productosCategoria = await cargarProductosPorCategoria(categoriaKey);
+            todosProductos = todosProductos.concat(productosCategoria);
+        }
     }
     
     return todosProductos;
 }
 
-// Función para obtener configuración de categoría
+// ===== FUNCIÓN PARA OBTENER CONFIGURACIÓN DE CATEGORÍA =====
 function obtenerConfigCategoria(categoriaKey) {
     return categoriasConfig[categoriaKey] || {
         nombre: categoriaKey,
@@ -120,7 +109,7 @@ function obtenerConfigCategoria(categoriaKey) {
     };
 }
 
-// Función para obtener lista de categorías para el filtro
+// ===== FUNCIÓN PARA OBTENER LISTA DE CATEGORÍAS =====
 function obtenerListaCategorias() {
     return Object.keys(categoriasConfig);
 }

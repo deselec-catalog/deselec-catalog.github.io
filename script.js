@@ -4,14 +4,23 @@ let filteredProducts = [];
 let currentState = {
     search: '',
     category: 'todas',
+    ubicacion: 'todas',
     stock: 'all'
 };
+
+// Lista de ubicaciones disponibles
+const UBICACIONES = [
+    { id: 'almacen1', nombre: '🏭 Almacén 1' },
+    { id: 'almacen2', nombre: '🏢 Almacén 2' },
+    { id: 'almacen3', nombre: '🏬 Almacén 3' }
+];
 
 // ===== FUNCIONES DE ESTADO Y PERSISTENCIA =====
 function saveCurrentState() {
     localStorage.setItem('stockmaster_state', JSON.stringify({
         search: document.getElementById('search-input')?.value || '',
         category: document.getElementById('category-filter')?.value || 'todas',
+        ubicacion: document.getElementById('ubicacion-filter')?.value || 'todas',
         stock: document.getElementById('stock-filter')?.value || 'all',
         timestamp: Date.now()
     }));
@@ -27,10 +36,12 @@ function loadSavedState() {
             // Restaurar valores en los inputs
             const searchInput = document.getElementById('search-input');
             const categoryFilter = document.getElementById('category-filter');
+            const ubicacionFilter = document.getElementById('ubicacion-filter');
             const stockFilter = document.getElementById('stock-filter');
 
             if (searchInput) searchInput.value = state.search || '';
             if (categoryFilter) categoryFilter.value = state.category || 'todas';
+            if (ubicacionFilter) ubicacionFilter.value = state.ubicacion || 'todas';
             if (stockFilter) stockFilter.value = state.stock || 'all';
 
             return true;
@@ -82,7 +93,6 @@ async function fetchProductsFromFirebase() {
             throw new Error('Firestore no inicializado');
         }
 
-        // 🔥 SOLUCIÓN: Obtener TODOS los documentos sin ordenar
         const snapshot = await db.collection('productos').get();
         const productos = [];
 
@@ -92,6 +102,7 @@ async function fetchProductsFromFirebase() {
                 id: data.id || doc.id,
                 name: data.name || '',
                 category: data.category || '',
+                ubicacion: data.ubicacion || 'almacen1',
                 description: data.description || '',
                 price: data.price || 0,
                 stock: data.stock || 0,
@@ -99,7 +110,6 @@ async function fetchProductsFromFirebase() {
             });
         });
 
-        // 🔥 Ordenar por ID numérico en JavaScript (NO en Firebase)
         productos.sort((a, b) => {
             const idA = parseInt(a.id) || 0;
             const idB = parseInt(b.id) || 0;
@@ -107,7 +117,6 @@ async function fetchProductsFromFirebase() {
         });
 
         console.log(`✅ ${productos.length} productos cargados de Firebase`);
-        console.log('IDs cargados:', productos.map(p => p.id).slice(0, 10)); // Verificar IDs
 
         localStorage.setItem('products_cache', JSON.stringify({
             products: productos,
@@ -184,7 +193,55 @@ async function deleteProductFromFirebase(productId) {
     }
 }
 
-// ===== FUNCIONES DE INTERFAZ MEJORADAS =====
+async function importProductsToFirebase(productsArray) {
+    try {
+        showLoading('Importando a Firebase...');
+
+        if (!db) throw new Error('Firestore no inicializado');
+
+        const batch = db.batch();
+        const productosRef = db.collection('productos');
+
+        productsArray.forEach(product => {
+            const docRef = productosRef.doc(product.id.toString());
+            batch.set(docRef, {
+                ...product,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        await batch.commit();
+        console.log(`✅ ${productsArray.length} productos importados a Firebase`);
+        return true;
+    } catch (error) {
+        console.error('Error importando a Firebase:', error);
+        return false;
+    }
+}
+
+// ===== FUNCIÓN PARA ASIGNAR CATEGORÍA AUTOMÁTICA =====
+function asignarCategoriaAutomatica(id) {
+    const idNum = parseInt(id);
+    
+    if (idNum >= 1001 && idNum <= 1999) return 'Cintas';
+    if (idNum >= 2001 && idNum <= 2999) return 'PVC';
+    if (idNum >= 3001 && idNum <= 3999) return 'Varillas';
+    if (idNum >= 4001 && idNum <= 4999) return 'Cables';
+    if (idNum >= 5001 && idNum <= 5999) return 'Abrazaderas';
+    if (idNum >= 6001 && idNum <= 6999) return 'Soportes';
+    if (idNum >= 7001 && idNum <= 7999) return 'Herramientas';
+    if (idNum >= 8001 && idNum <= 8999) return 'Tuberías';
+    if (idNum >= 9001 && idNum <= 9999) return 'Cobre';
+    
+    if (idNum >= 10001 && idNum <= 10999) return 'Cables Especiales';
+    if (idNum >= 11001 && idNum <= 11999) return 'Componentes';
+    if (idNum >= 12001 && idNum <= 12999) return 'Accesorios';
+    
+    return 'Otros';
+}
+
+// ===== FUNCIONES DE INTERFAZ =====
 function updateSyncStatus(status, message) {
     const syncStatusElement = document.getElementById('sync-status');
     if (!syncStatusElement) return;
@@ -223,7 +280,7 @@ function renderProducts(productsArray) {
             <div class="no-results">
                 <i class="fas fa-search"></i>
                 <h3>No se encontraron productos</h3>
-                <p>${currentState.search || currentState.category !== 'todas' ? 'Intenta con otros filtros' : 'Agrega tu primer producto usando el botón "Agregar Producto"'}</p>
+                <p>${currentState.search || currentState.category !== 'todas' || currentState.ubicacion !== 'todas' ? 'Intenta con otros filtros' : 'Agrega tu primer producto usando el botón "Agregar Producto"'}</p>
             </div>
         `;
         return;
@@ -231,6 +288,7 @@ function renderProducts(productsArray) {
 
     productsArray.forEach(product => {
         const categoriaConfig = obtenerConfigCategoria(product.category);
+        const ubicacionObj = UBICACIONES.find(u => u.id === product.ubicacion);
 
         let stockClass = 'high-stock';
         if (product.stock <= 5) {
@@ -250,6 +308,10 @@ function renderProducts(productsArray) {
             </div>
             <div class="product-info">
                 <div class="product-category">${categoriaConfig.nombre}</div>
+                <div style="display: flex; gap: 5px; align-items: center; margin-top: 5px; margin-bottom: 5px; font-size: 12px; color: #666;">
+                    <i class="fas fa-map-marker-alt" style="color: #3498db;"></i>
+                    <span>${ubicacionObj?.nombre || '📍 Sin ubicación'}</span>
+                </div>
                 <h3 class="product-name">${product.name}</h3>
                 <p class="product-description">${product.description}</p>
                 <div class="product-actions">
@@ -308,13 +370,14 @@ function filterProducts() {
     const searchInput = document.getElementById('search-input');
     const categoryFilter = document.getElementById('category-filter');
     const stockFilter = document.getElementById('stock-filter');
+    const ubicacionFilter = document.getElementById('ubicacion-filter');
 
     if (!searchInput || !categoryFilter || !stockFilter) return;
 
-    // Guardar estado actual
     currentState = {
         search: searchInput.value,
         category: categoryFilter.value,
+        ubicacion: ubicacionFilter?.value || 'todas',
         stock: stockFilter.value
     };
 
@@ -322,6 +385,7 @@ function filterProducts() {
 
     const searchTerm = searchInput.value.toLowerCase();
     const selectedCategory = categoryFilter.value;
+    const selectedUbicacion = ubicacionFilter?.value || 'todas';
     const selectedStock = stockFilter.value;
 
     filteredProducts = products.filter(product => {
@@ -332,6 +396,7 @@ function filterProducts() {
             (product.description && product.description.toLowerCase().includes(searchTerm));
 
         const categoryMatch = selectedCategory === 'todas' || product.category === selectedCategory;
+        const ubicacionMatch = selectedUbicacion === 'todas' || product.ubicacion === selectedUbicacion;
 
         let stockMatch = true;
         if (selectedStock !== 'all') {
@@ -342,16 +407,54 @@ function filterProducts() {
             }
         }
 
-        return searchMatch && categoryMatch && stockMatch;
+        return searchMatch && categoryMatch && ubicacionMatch && stockMatch;
     });
 
     renderProducts(filteredProducts);
     updateStats();
 }
 
+// ===== FUNCIÓN PARA CREAR FILTRO DE UBICACIONES =====
+function crearFiltroUbicaciones() {
+    const filterGroup = document.querySelector('.filter-group');
+    if (!filterGroup) return;
+    
+    const ubicacionSelect = document.createElement('select');
+    ubicacionSelect.className = 'filter-select';
+    ubicacionSelect.id = 'ubicacion-filter';
+    ubicacionSelect.style.marginLeft = '10px';
+    
+    const todasOption = document.createElement('option');
+    todasOption.value = 'todas';
+    todasOption.textContent = '📍 Todas las ubicaciones';
+    ubicacionSelect.appendChild(todasOption);
+    
+    UBICACIONES.forEach(ubic => {
+        const option = document.createElement('option');
+        option.value = ubic.id;
+        option.textContent = ubic.nombre;
+        ubicacionSelect.appendChild(option);
+    });
+    
+    const stockFilter = document.getElementById('stock-filter');
+    if (stockFilter && stockFilter.parentNode) {
+        stockFilter.parentNode.insertBefore(ubicacionSelect, stockFilter.nextSibling);
+    } else {
+        filterGroup.appendChild(ubicacionSelect);
+    }
+    
+    ubicacionSelect.addEventListener('change', () => {
+        currentState.ubicacion = ubicacionSelect.value;
+        saveCurrentState();
+        filterProducts();
+    });
+    
+    return ubicacionSelect;
+}
+
 // ===== FUNCIÓN PARA AJUSTAR CANTIDAD ESPECÍFICA =====
 let currentProductForAdjustment = null;
-let adjustmentType = 0; // 1 = aumentar, -1 = reducir
+let adjustmentType = 0;
 
 function mostrarModalAjustarCantidad(productId, type) {
     currentProductForAdjustment = productId;
@@ -447,7 +550,6 @@ function mostrarModalAjustarCantidad(productId, type) {
 
     document.body.appendChild(modal);
 
-    // Configurar botones de cantidad
     const quantityInput = document.getElementById('adjust-quantity');
     quantityInput.focus();
     quantityInput.select();
@@ -471,7 +573,6 @@ function cambiarCantidad(change) {
 
     if (value < 1) value = 1;
 
-    // Si estamos reduciendo, no permitir más que el stock actual
     if (adjustmentType === -1) {
         const product = products.find(p => p.id.toString() === currentProductForAdjustment.toString());
         if (product && value > product.stock) {
@@ -509,20 +610,15 @@ async function adjustStock(productId, change) {
         const productName = products[productIndex].name;
 
         try {
-            // Actualizar localmente inmediatamente
             products[productIndex].stock = newStock;
-
-            // IMPORTANTE: Actualizar filtros AUTOMÁTICAMENTE
             filterProducts();
 
-            // Intentar sincronizar con Firebase
             showNotification(`🔄 Actualizando "${productName}"...`, 'warning');
             const synced = await updateStockInFirebase(productId, newStock);
 
             if (synced) {
                 showNotification(`✅ "${productName}" actualizado a ${newStock} unidades`, 'success');
 
-                // Actualizar caché local
                 const cache = localStorage.getItem('products_cache');
                 if (cache) {
                     const data = JSON.parse(cache);
@@ -640,6 +736,17 @@ function mostrarModalAgregarProducto() {
                         </select>
                     </div>
                 </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                        <i class="fas fa-map-marker-alt"></i> Ubicación
+                    </label>
+                    <select id="product-ubicacion" required 
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="">Seleccionar ubicación</option>
+                        ${UBICACIONES.map(ubic => `<option value="${ubic.id}">${ubic.nombre}</option>`).join('')}
+                    </select>
+                </div>
                 
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nombre del Producto</label>
@@ -726,10 +833,24 @@ function poblarCategoriasEnModal() {
 
 async function guardarNuevoProducto() {
     try {
+        const productId = parseInt(document.getElementById('product-id').value);
+        const ubicacion = document.getElementById('product-ubicacion').value;
+        
+        if (!ubicacion) {
+            alert('❌ Debes seleccionar una ubicación');
+            return;
+        }
+        
+        const categoriaAsignada = asignarCategoriaAutomatica(productId);
+        
+        const ubicacionObj = UBICACIONES.find(u => u.id === ubicacion);
+        const nombreUbicacion = ubicacionObj ? ubicacionObj.nombre : ubicacion;
+        
         const nuevoProducto = {
-            id: parseInt(document.getElementById('product-id').value),
+            id: productId,
             name: document.getElementById('product-name').value,
-            category: document.getElementById('product-category').value,
+            category: categoriaAsignada,
+            ubicacion: ubicacion,
             description: document.getElementById('product-description').value,
             price: parseFloat(document.getElementById('product-price').value),
             stock: parseInt(document.getElementById('product-stock').value),
@@ -741,15 +862,12 @@ async function guardarNuevoProducto() {
             return;
         }
 
-        showNotification(`🔄 Guardando "${nuevoProducto.name}"...`, 'warning');
+        showNotification(`🔄 Guardando "${nuevoProducto.name}" en ${nombreUbicacion}...`, 'warning');
 
         const success = await saveProductToFirebase(nuevoProducto);
 
         if (success) {
-            // Agregar a array local
             products.push(nuevoProducto);
-
-            // IMPORTANTE: Actualizar filtros automáticamente
             filterProducts();
 
             localStorage.setItem('products_cache', JSON.stringify({
@@ -759,7 +877,7 @@ async function guardarNuevoProducto() {
             }));
 
             cerrarModalAgregarProducto();
-            showNotification(`✅ Producto "${nuevoProducto.name}" agregado correctamente`, 'success');
+            showNotification(`✅ Producto "${nuevoProducto.name}" agregado en ${nombreUbicacion}`, 'success');
         } else {
             showNotification(`❌ Error al guardar producto en Firebase`, 'error');
         }
@@ -817,6 +935,19 @@ function mostrarModalEditarProducto(producto) {
                     <label style="display: block; margin-bottom: 5px; font-weight: bold;">Categoría</label>
                     <select id="edit-product-category" required 
                             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                        <i class="fas fa-map-marker-alt"></i> Ubicación
+                    </label>
+                    <select id="edit-product-ubicacion" required 
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        ${UBICACIONES.map(ubic => {
+                            const selected = producto.ubicacion === ubic.id ? 'selected' : '';
+                            return `<option value="${ubic.id}" ${selected}>${ubic.nombre}</option>`;
+                        }).join('')}
                     </select>
                 </div>
                 
@@ -900,6 +1031,7 @@ async function guardarCambiosProducto() {
             ...products[productIndex],
             name: document.getElementById('edit-product-name').value,
             category: document.getElementById('edit-product-category').value,
+            ubicacion: document.getElementById('edit-product-ubicacion').value,
             description: document.getElementById('edit-product-description').value,
             price: parseFloat(document.getElementById('edit-product-price').value),
             stock: parseInt(document.getElementById('edit-product-stock').value)
@@ -911,8 +1043,6 @@ async function guardarCambiosProducto() {
 
         if (success) {
             products[productIndex] = productoActualizado;
-
-            // IMPORTANTE: Actualizar filtros automáticamente
             filterProducts();
 
             localStorage.setItem('products_cache', JSON.stringify({
@@ -947,8 +1077,6 @@ async function eliminarProducto(productId) {
 
     if (success) {
         products.splice(productIndex, 1);
-
-        // IMPORTANTE: Actualizar filtros automáticamente
         filterProducts();
 
         localStorage.setItem('products_cache', JSON.stringify({
@@ -1073,13 +1201,10 @@ async function manualSync() {
 async function init() {
     console.log('🚀 Inicializando StockMaster con Firebase...');
 
-    // Cargar estado guardado (filtros)
     loadSavedState();
-
-    // Poblar filtro de categorías
     poblarFiltroCategorias();
+    crearFiltroUbicaciones();
 
-    // Configurar event listeners
     const searchInput = document.getElementById('search-input');
     const categoryFilter = document.getElementById('category-filter');
     const stockFilter = document.getElementById('stock-filter');
@@ -1089,7 +1214,6 @@ async function init() {
 
     if (searchInput) {
         searchInput.addEventListener('input', filterProducts);
-        // Guardar estado mientras se escribe (con debounce)
         let searchTimeout;
         searchInput.addEventListener('input', () => {
             clearTimeout(searchTimeout);
@@ -1111,6 +1235,8 @@ async function init() {
         resetFiltersBtn.addEventListener('click', () => {
             if (searchInput) searchInput.value = '';
             if (categoryFilter) categoryFilter.value = 'todas';
+            const ubicacionFilter = document.getElementById('ubicacion-filter');
+            if (ubicacionFilter) ubicacionFilter.value = 'todas';
             if (stockFilter) stockFilter.value = 'all';
             filterProducts();
             saveCurrentState();
@@ -1127,7 +1253,6 @@ async function init() {
         });
     }
 
-    // Configurar modal de backup
     const modal = document.getElementById('backup-modal');
     if (modal) {
         const closeBtn = modal.querySelector('.close-modal');
@@ -1163,10 +1288,8 @@ async function init() {
         }
     }
 
-    // Agregar botón para nuevo producto
     crearInterfazAgregarProducto();
 
-    // Inicializar Firebase y cargar productos
     updateSyncStatus('syncing', 'Conectando a Firebase...');
     const firebaseConnected = await initFirebase();
 
@@ -1181,7 +1304,6 @@ async function init() {
     renderProducts(filteredProducts);
     updateStats();
 
-    // Escuchar cambios en tiempo real de Firebase
     if (firebaseConnected && db) {
         db.collection('productos').onSnapshot((snapshot) => {
             console.log('📡 Cambio detectado en Firebase');
@@ -1241,13 +1363,15 @@ style.textContent = `
     .btn-delete:hover {
         background: #c0392b;
     }
+
+    .filter-select {
+        margin-right: 10px;
+    }
 `;
 document.head.appendChild(style);
 
-// Inicializar cuando se carga la página
 document.addEventListener('DOMContentLoaded', init);
 
-// Hacer funciones globales
 window.adjustStock = adjustStock;
 window.showNotification = showNotification;
 window.editarProducto = editarProducto;
