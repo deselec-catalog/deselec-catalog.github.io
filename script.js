@@ -4,9 +4,19 @@ let filteredProducts = [];
 
 // Lista de categorías
 const CATEGORIAS = [
-    'Cintas', 'PVC', 'Varillas', 'Cables', 'Abrazaderas', 
-    'Soportes', 'Herramientas', 'Tuberías', 'Cobre',
-    'Cables Especiales', 'Componentes', 'Accesorios', 'Otros'
+    'Cintas', 
+    'Varillas', 
+    'Soportes', 
+    'Abrazaderas', 
+    'Cables', 
+    'Coquillas', 
+    'Cobre', 
+    'Tuberia chapa', 
+    'Mantenimiento',
+    'Otros',
+    'Electricidad', 
+    'Tornilleria',
+    'PVC'
 ];
 
 // Ubicaciones
