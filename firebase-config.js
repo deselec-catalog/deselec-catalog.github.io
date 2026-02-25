@@ -1,5 +1,4 @@
 // ===== CONFIGURACIÓN DE FIREBASE =====
-import { initializeApp } from "firebase/app";
 const firebaseConfig = {
     apiKey: "AIzaSyCieW2pgIbGFqwBPkTQ6IK4a6QDbdoMvog",
     authDomain: "stockmaster-173bd.firebaseapp.com",
