@@ -11,9 +11,9 @@ const CATEGORIAS = [
 
 // Ubicaciones
 const UBICACIONES = [
-    { id: 'almacen1', nombre: '🏭 Almacén' },
-    { id: 'almacen2', nombre: '🏢 Cisterna' },
-    { id: 'almacen3', nombre: '🏬 Contenedor' }
+    { id: 'almacen', nombre: '🏭 Almacén' },
+    { id: 'cisterna', nombre: '🏢 Cisterna' },
+    { id: 'contenedor', nombre: '🏬 Contenedor' }
 ];
 
 // ===== FUNCIÓN DE CONEXIÓN =====
@@ -298,7 +298,7 @@ function mostrarModalAgregar() {
                     <textarea id="nuevo-descripcion" rows="2" style="width:100%;padding:8px;"></textarea>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px;">
-                    <div><label>Precio:</label><input type="number" id="nuevo-precio" step="0.01" required style="width:100%;padding:8px;"></div>
+                    <div><label>Precio €:</label><input type="number" id="nuevo-precio" step="0.01" required style="width:100%;padding:8px;"></div>
                     <div><label>Stock:</label><input type="number" id="nuevo-stock" required style="width:100%;padding:8px;"></div>
                 </div>
                 <div style="display:flex;gap:10px;justify-content:flex-end;">
