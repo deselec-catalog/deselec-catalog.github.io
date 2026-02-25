@@ -67,43 +67,10 @@ const categoriasConfig = {
     }
 };
 
-// ===== FUNCIÓN PARA CARGAR PRODUCTOS DE UNA CATEGORÍA =====
-async function cargarProductosPorCategoria(categoriaKey) {
-    try {
-        const config = categoriasConfig[categoriaKey];
-        const response = await fetch(config.archivo);
-        if (!response.ok) throw new Error(`Error al cargar ${config.nombre}`);
-        
-        const productos = await response.json();
-        return productos.map(producto => ({
-            ...producto,
-            category: categoriaKey,
-            ubicacion: producto.ubicacion || 'almacen1'
-        }));
-    } catch (error) {
-        console.error('Error cargando productos:', error);
-        return [];
-    }
-}
-
-// ===== FUNCIÓN PARA CARGAR TODOS LOS PRODUCTOS =====
-async function cargarTodosLosProductos() {
-    let todosProductos = [];
-    
-    for (const categoriaKey in categoriasConfig) {
-        if (categoriasConfig[categoriaKey].archivo) {
-            const productosCategoria = await cargarProductosPorCategoria(categoriaKey);
-            todosProductos = todosProductos.concat(productosCategoria);
-        }
-    }
-    
-    return todosProductos;
-}
-
 // ===== FUNCIÓN PARA OBTENER CONFIGURACIÓN DE CATEGORÍA =====
 function obtenerConfigCategoria(categoriaKey) {
     return categoriasConfig[categoriaKey] || {
-        nombre: categoriaKey,
+        nombre: categoriaKey || 'Sin categoría',
         icono: 'fas fa-archive',
         color: '#7f8c8d'
     };
@@ -112,4 +79,11 @@ function obtenerConfigCategoria(categoriaKey) {
 // ===== FUNCIÓN PARA OBTENER LISTA DE CATEGORÍAS =====
 function obtenerListaCategorias() {
     return Object.keys(categoriasConfig);
+}
+
+// ===== FUNCIÓN PARA CARGAR TODOS LOS PRODUCTOS (AHORA VACÍA) =====
+// Esta función ya no es necesaria con Firebase, pero la mantenemos por compatibilidad
+async function cargarTodosLosProductos() {
+    console.log('📁 Cargando productos locales (obsoleto - usando Firebase)');
+    return [];
 }
