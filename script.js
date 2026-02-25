@@ -5,15 +5,15 @@ let filteredProducts = [];
 // Lista de categorías
 const CATEGORIAS = [
     'Cintas', 'PVC', 'Varillas', 'Cables', 'Abrazaderas', 
-    'Soportes', 'Herramientas', 'Tubería chapa', 'Cobre',
-    'Mantenimiento', 'Otros'
+    'Soportes', 'Herramientas', 'Tuberías', 'Cobre',
+    'Cables Especiales', 'Componentes', 'Accesorios', 'Otros'
 ];
 
 // Ubicaciones
 const UBICACIONES = [
-    { id: 'Almacen', nombre: '🏭 Almacén' },
-    { id: 'Cisterna', nombre: '🏢 Cisterna' },
-    { id: 'Contenedor', nombre: '🏬 Contenedor' }
+    { id: 'almacen1', nombre: '🏭 Almacén 1' },
+    { id: 'almacen2', nombre: '🏢 Almacén 2' },
+    { id: 'almacen3', nombre: '🏬 Almacén 3' }
 ];
 
 // ===== FUNCIÓN DE CONEXIÓN =====
@@ -86,7 +86,7 @@ async function cargarProductos() {
     }
 }
 
-// ===== MOSTRAR PRODUCTOS CON BOTÓN EDITAR =====
+// ===== MOSTRAR PRODUCTOS CON BOTÓN EDITAR Y ELIMINAR =====
 function mostrarProductos(productosAMostrar) {
     const container = document.getElementById('products-container');
     if (!container) return;
@@ -128,14 +128,19 @@ function mostrarProductos(productosAMostrar) {
                         <span class="stock-amount ${stockClass}">${product.stock} uds</span>
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 15px; justify-content: space-between;">
+                <div style="display: flex; gap: 5px; margin-top: 15px; justify-content: space-between;">
                     <div style="display: flex; gap: 5px;">
                         <button class="btn btn-outline" onclick="ajustarStock('${product.id}', -1)">-1</button>
                         <button class="btn btn-primary" onclick="ajustarStock('${product.id}', 1)">+1</button>
                     </div>
-                    <button class="btn btn-edit" onclick="mostrarModalEditar('${product.id}')" style="background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 5px;">
-                        <i class="fas fa-edit"></i> Editar
-                    </button>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="btn btn-edit" onclick="mostrarModalEditar('${product.id}')" style="background: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 5px;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-delete" onclick="eliminarProducto('${product.id}')" style="background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 5px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -177,7 +182,26 @@ window.ajustarStock = async function(id, cambio) {
     }
 }
 
-// ===== MODAL EDITAR PRODUCTO (COMPLETO) =====
+// ===== ELIMINAR PRODUCTO =====
+window.eliminarProducto = async function(id) {
+    if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+    
+    try {
+        const db = firebase.firestore();
+        await db.collection('productos').doc(id.toString()).delete();
+        
+        products = products.filter(p => p.id != id);
+        filtrarProductos();
+        llenarFiltros();
+        mostrarNotificacion('✅ Producto eliminado');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('❌ Error al eliminar', 'error');
+    }
+}
+
+// ===== MODAL EDITAR PRODUCTO =====
 window.mostrarModalEditar = function(id) {
     const producto = products.find(p => p.id == id);
     if (!producto) return;
@@ -288,7 +312,6 @@ async function guardarEdicion(id) {
         const db = firebase.firestore();
         await db.collection('productos').doc(id.toString()).update(productoActualizado);
         
-        // Actualizar en array local
         const index = products.findIndex(p => p.id == id);
         if (index !== -1) {
             products[index] = productoActualizado;
@@ -475,29 +498,23 @@ function filtrarProductos() {
     actualizarStats(filteredProducts);
 }
 
-// ===== REORGANIZAR BOTONES =====
+// ===== REORGANIZAR CONTROLES =====
 function reorganizarControles() {
     const controls = document.querySelector('.controls');
     if (!controls) return;
     
-    // Hacer que el contenedor sea flex con espacio entre
     controls.style.display = 'flex';
     controls.style.justifyContent = 'space-between';
     controls.style.alignItems = 'center';
     controls.style.flexWrap = 'wrap';
     controls.style.gap = '10px';
     
-    // Grupo izquierdo (búsqueda)
-    const searchBox = document.querySelector('.search-box');
-    
-    // Grupo derecho (botones)
     const rightGroup = document.createElement('div');
     rightGroup.className = 'button-group-right';
     rightGroup.style.display = 'flex';
     rightGroup.style.gap = '10px';
     rightGroup.style.flexWrap = 'wrap';
     
-    // Mover los botones al grupo derecho
     const buttons = [
         document.getElementById('reset-filters'),
         document.getElementById('sync-button'),
@@ -511,7 +528,6 @@ function reorganizarControles() {
         }
     });
     
-    // Crear botón "Agregar Producto"
     const addBtn = document.createElement('button');
     addBtn.className = 'btn btn-success';
     addBtn.id = 'add-product-button';
@@ -519,10 +535,8 @@ function reorganizarControles() {
     addBtn.onclick = () => mostrarModalAgregar();
     rightGroup.appendChild(addBtn);
     
-    // Agregar grupo derecho al controls
     controls.appendChild(rightGroup);
     
-    // Crear filtro de ubicaciones si no existe
     if (!document.getElementById('ubicacion-filter')) {
         const filterGroup = document.querySelector('.filter-group');
         if (filterGroup) {
@@ -583,30 +597,14 @@ function configurarEventos() {
     }
 }
 
-// ===== INICIAR =====
-async function iniciar() {
-    console.log('🚀 Iniciando...');
-    
-    reorganizarControles();
-    
-    const conectado = await conectarFirebase();
-    
-    if (conectado) {
-        await cargarProductos();
-        configurarEventos();
-    } else {
-        document.getElementById('sync-status').innerHTML = '❌ Error de conexión';
-    }
-}
-
-// Estilos adicionales
+// ===== ESTILOS ADICIONALES =====
 const style = document.createElement('style');
 style.textContent = `
     .btn-edit {
         background: #3498db;
         color: white;
         border: none;
-        padding: 8px 15px;
+        padding: 8px 12px;
         border-radius: 5px;
         cursor: pointer;
         font-size: 14px;
@@ -614,6 +612,19 @@ style.textContent = `
     }
     .btn-edit:hover {
         background: #2980b9;
+    }
+    .btn-delete {
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+    }
+    .btn-delete:hover {
+        background: #c0392b;
     }
     .btn-success {
         background: #2ecc71;
@@ -632,5 +643,21 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// ===== INICIAR =====
+async function iniciar() {
+    console.log('🚀 Iniciando...');
+    
+    reorganizarControles();
+    
+    const conectado = await conectarFirebase();
+    
+    if (conectado) {
+        await cargarProductos();
+        configurarEventos();
+    } else {
+        document.getElementById('sync-status').innerHTML = '❌ Error de conexión';
+    }
+}
 
 document.addEventListener('DOMContentLoaded', iniciar);
