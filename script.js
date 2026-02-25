@@ -21,9 +21,9 @@ const CATEGORIAS = [
 
 // Ubicaciones
 const UBICACIONES = [
-    { id: 'almacen1', nombre: '🏭 Almacén 1' },
-    { id: 'almacen2', nombre: '🏢 Almacén 2' },
-    { id: 'almacen3', nombre: '🏬 Almacén 3' }
+    { id: 'almacen', nombre: '🏭 Almacén' },
+    { id: 'cisterna', nombre: '🏢 Cisterna' },
+    { id: 'contenedor', nombre: '🏬 Contenedor' }
 ];
 
 // ===== FUNCIÓN DE CONEXIÓN =====
